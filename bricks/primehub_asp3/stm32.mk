@@ -6,7 +6,7 @@
 # Other ports should not use this file
 
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
-PBTOP := ../$(patsubst %/stm32/stm32.mk,%,$(THIS_MAKEFILE))
+PBTOP := ../../
 
 # ensure required git submodules checked out
 ifeq ("$(wildcard $(PBTOP)/micropython/README.md)","")
@@ -105,16 +105,6 @@ INC += -I$(PBTOP)
 INC += -I$(BUILD)
 
 GIT = git
-ZIP = zip
-DFU = $(TOP)/tools/dfu.py
-PYDFU = $(TOP)/tools/pydfu.py
-PYBRICKSDEV = pybricksdev
-CHECKSUM = $(PBTOP)/tools/checksum.py
-CHECKSUM_TYPE ?= xor
-METADATA = $(PBTOP)/tools/metadata.py
-OPENOCD ?= openocd
-OPENOCD_CONFIG ?= openocd_stm32$(PB_MCU_SERIES_LCASE).cfg
-TEXT0_ADDR ?= 0x08000000
 
 CFLAGS_MCU_F0 = -mthumb -mtune=cortex-m0 -mcpu=cortex-m0  -msoft-float
 CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
@@ -125,7 +115,7 @@ CFLAGS = $(INC) -Wall -Werror -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB
 CFLAGS += -DHSE_VALUE=$(PB_MCU_EXT_OSC_HZ)
 
 # linker scripts
-LD_FILES = $(PBIO_PLATFORM).ld $(PBTOP)/bricks/stm32/common.ld
+LD_FILES = $(PBTOP)/bricks/stm32/common.ld
 
 LDFLAGS = -nostdlib $(addprefix -T,$(LD_FILES)) -Map=$@.map --cref --gc-sections
 
@@ -154,7 +144,6 @@ MPY_CROSS_FLAGS += -mno-unicode
 LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
 SRC_C = $(addprefix bricks/stm32/,\
-	main.c \
 	mphalport.c \
 	)
 
@@ -175,9 +164,6 @@ SRC_C += $(addprefix shared/,\
 	runtime/stdout_helpers.c \
 	runtime/sys_stdio_mphal.c \
 	)
-
-SRC_S = \
-	lib/pbio/platform/$(PBIO_PLATFORM)/startup.s \
 
 ifeq ($(PB_MCU_SERIES),F0)
 	SRC_S += shared/runtime/gchelper_m0.s
@@ -575,10 +561,7 @@ SRC_QSTR += $(SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
 # Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
-# Main firmware build targets
-TARGETS := $(BUILD)/firmware.zip $(BUILD)/firmware.bin
-
-all: $(TARGETS)
+all: libpybricks.a
 
 # handle BTStack .gatt files
 
@@ -597,77 +580,10 @@ $(BUILD)/genhdr/%.h: $(PBTOP)/lib/pbio/drv/bluetooth/%.gatt
 
 endif
 
-FW_CHECKSUM := $$($(CHECKSUM) $(CHECKSUM_TYPE) $(BUILD)/firmware-no-checksum.bin $(PB_FIRMWARE_MAX_SIZE))
-FW_VERSION := $(shell $(GIT) describe --tags --dirty --always --exclude "@pybricks/*")
-
-# Sections to include in the binary
-ifeq ($(PB_INCLUDE_MAIN_MPY),1)
-SECTIONS := -j .isr_vector -j .text -j .data -j .name -j .user -j .checksum
-else
-SECTIONS := -j .isr_vector -j .text -j .data -j .name -j .checksum
-endif
-
-$(BUILD)/firmware-no-checksum.elf: $(LD_FILES) $(OBJ)
+libpybricks.a: $(OBJ)
 	$(ECHO) "LINK $@"
-	$(Q)$(LD) --defsym=CHECKSUM=0 $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
-	$(Q)$(SIZE) -A $@
+	$(Q)$(AR) rcs $@ $(OBJ) $(LIBS)
 
-# firmware blob used to calculate checksum
-$(BUILD)/firmware-no-checksum.bin: $(BUILD)/firmware-no-checksum.elf
-	$(Q)$(OBJCOPY) -O binary $(SECTIONS) $^ $@
-
-$(BUILD)/firmware.elf: $(BUILD)/firmware-no-checksum.bin $(OBJ)
-	$(ECHO) "RELINK $@"
-	$(Q)$(LD) --defsym=CHECKSUM=$(FW_CHECKSUM) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
-
-# firmware blob with main.mpy and checksum appended - can be flashed to hub
-$(BUILD)/firmware.bin: $(BUILD)/firmware.elf
-	$(ECHO) "BIN creating firmware file"
-	$(Q)$(OBJCOPY) -O binary $(SECTIONS) $^ $@
-	$(ECHO) "`wc -c < $@` bytes"
-
-# firmware blob without main.mpy or checksum - use as base for appending other .mpy
-$(BUILD)/firmware-base.bin: $(BUILD)/firmware-no-checksum.elf
-	$(ECHO) "BIN creating firmware base file"
-	$(Q)$(OBJCOPY) -O binary -j .isr_vector -j .text -j .data -j .name $^ $@
-	$(ECHO) "`wc -c < $@` bytes"
-
-$(BUILD)/firmware.metadata.json: $(BUILD)/firmware-no-checksum.elf $(BUILD)/firmware.bin $(METADATA)
-	$(ECHO) "META creating firmware metadata"
-	$(Q)$(METADATA) $(FW_VERSION) $(PBIO_PLATFORM) $(MPY_CROSS_FLAGS) $<.map $(word 2,$^) $@
-
-# firmware.zip file
-ZIP_FILES := \
-	$(BUILD)/firmware.metadata.json \
-	ReadMe_OSS.txt \
-
-ifeq ($(PB_INCLUDE_MAIN_MPY),1)
-ZIP_FILES += main.py $(BUILD)/firmware-base.bin
-else
-ZIP_FILES += $(BUILD)/firmware.bin
-ZIP_FILES += $(PBTOP)/bricks/stm32/install_pybricks.py
-endif
-
-$(BUILD)/firmware.zip: $(ZIP_FILES)
-	$(ECHO) "ZIP creating firmware package"
-	$(Q)$(ZIP) -j $@ $^
-
-# firmware in DFU format
-$(BUILD)/%.dfu: $(BUILD)/%.bin
-	$(ECHO) "DFU Create $@"
-	$(Q)$(PYTHON) $(DFU) -b $(TEXT0_ADDR):$< $@
-
-deploy: $(BUILD)/firmware.zip
-	$(Q)$(PYBRICKSDEV) flash $<
-
-deploy-dfu-%: $(BUILD)/%.dfu
-	$(ECHO) "Writing $< to the board"
-	$(Q)$(PYTHON) $(PYDFU) -u $< $(if $(DFU_VID),--vid $(DFU_VID)) $(if $(DFU_PID),--pid $(DFU_PID))
-
-deploy-dfu: deploy-dfu-firmware
-
-deploy-openocd: $(BUILD)/firmware-no-checksum.bin
-	$(ECHO) "Writing $< to the board via ST-LINK using OpenOCD"
-	$(Q)$(OPENOCD) -f $(OPENOCD_CONFIG) -c "stm_flash $< $(TEXT0_ADDR)"
+#$(RANLIB) $@
 
 include $(TOP)/py/mkrules.mk
