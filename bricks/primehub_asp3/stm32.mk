@@ -107,7 +107,8 @@ INC += -I$(BUILD)
 GIT = git
 
 CFLAGS_MCU_F0 = -mthumb -mtune=cortex-m0 -mcpu=cortex-m0  -msoft-float
-CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+#CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4  -msoft-float
 CFLAGS_MCU_L4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 CFLAGS = $(INC) -Wall -Werror -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB_MCU_SERIES)) $(COPT) $(CFLAGS_EXTRA)
 
@@ -143,7 +144,8 @@ MPY_CROSS_FLAGS += -mno-unicode
 
 LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
-SRC_C = $(addprefix bricks/stm32/,\
+SRC_C = $(addprefix bricks/primehub_asp3/,\
+	main.c \
 	mphalport.c \
 	)
 
@@ -582,7 +584,8 @@ endif
 
 libpybricks.a: $(OBJ)
 	$(ECHO) "LINK $@"
-	$(Q)$(AR) rcs $@ $(OBJ) $(LIBS)
+	$(ECHO) "OBJ    = $(OBJ)"
+	$(Q)$(AR) rcs $@ $(OBJ)
 
 #$(RANLIB) $@
 

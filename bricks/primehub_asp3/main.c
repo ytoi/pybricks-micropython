@@ -35,8 +35,8 @@
 // RAM after .data and .bss sections. But it would probably be better to specify
 // the stack size and let the heap be whatever is leftover.
 
+uint32_t pb_stack[4096];
 // defined in linker script
-extern uint32_t _estack;
 extern uint32_t __bss_end;
 
 #if MICROPY_ENABLE_GC
@@ -183,12 +183,6 @@ static uint32_t get_user_program(uint8_t **buf, uint32_t *free_len) {
     uint32_t len;
     err = get_message((uint8_t *)&len, sizeof(len), -1);
 
-    // If button was pressed, return code to run script in flash
-    if (err == PBIO_ERROR_CANCELED) {
-        *buf = &_pb_user_mpy_data;
-        return _pb_user_mpy_size;
-    }
-
     // Handle other errors
     if (err != PBIO_SUCCESS) {
         return 0;
@@ -327,13 +321,21 @@ restart:
     pbsys_user_program_unprepare();
 }
 
+#include <pbdrv/watchdog.h>
+pbio_error_t pbsys_usb_stdout_put_char(uint8_t c);
 static void stm32_main(void) {
+    while(1){
+      // pbsys_usb_stdout_put_char('a');
+      // pbsys_usb_stdout_put_char('b');
+      // pbdrv_watchdog_update();
+      pb_stm32_poll();
+    }
 soft_reset:
     // Stack limit should be less than real stack size, so we have a chance
     // to recover from limit hit.  (Limit is measured in bytes.)
     // Note: stack control relies on main thread being initialised above
-    mp_stack_set_top(&_estack);
-    mp_stack_set_limit((char *)&_estack - (char *)&__bss_end - 1024);
+    mp_stack_set_top(&pb_stack[4095]);
+    mp_stack_set_limit(sizeof(uint32_t)*4096);
 
     #if MICROPY_ENABLE_GC
     gc_init(heap, heap + sizeof(heap));
@@ -375,18 +377,10 @@ mp_lexer_t *mp_lexer_new_from_file(const char *filename) {
 }
 
 void mp_reader_new_file(mp_reader_t *reader, const char *filename) {
-    if (strcmp(filename, "main.mpy") != 0) {
-        mp_raise_OSError(MP_ENOENT);
-    }
-
-    mp_reader_new_mem(reader, &_pb_user_mpy_data, _pb_user_mpy_size, 0);
+    mp_raise_OSError(MP_ENOENT);
 }
 
 mp_import_stat_t mp_import_stat(const char *path) {
-    if (strcmp(path, "main.mpy") == 0) {
-        return MP_IMPORT_STAT_FILE;
-    }
-
     return MP_IMPORT_STAT_NO_EXIST;
 }
 
