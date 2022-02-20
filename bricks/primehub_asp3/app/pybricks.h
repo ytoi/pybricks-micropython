@@ -168,5 +168,6 @@
 #ifndef TOPPERS_MACRO_ONLY
 
 extern void	pb_main_task(intptr_t exinf);
+extern void pbdrv_timer_handler(void);
 
 #endif /* TOPPERS_MACRO_ONLY */

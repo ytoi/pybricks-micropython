@@ -42,7 +42,8 @@
 #define PBDRV_CONFIG_CHARGER_MP2639A_CHG_RESISTOR_LADDER (1)
 
 #define PBDRV_CONFIG_CLOCK                          (1)
-#define PBDRV_CONFIG_CLOCK_STM32                    (1)
+#define PBDRV_CONFIG_CLOCK_ASP3                    (1)
+// #define PBDRV_CONFIG_CLOCK_STM32                    (1)
 
 #define PBDRV_CONFIG_COUNTER                        (1)
 #define PBDRV_CONFIG_COUNTER_NUM_DEV                (6)
