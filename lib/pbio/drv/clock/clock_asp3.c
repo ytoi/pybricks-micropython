@@ -27,6 +27,8 @@ uint32_t pbdrv_clock_get_us(void) {
 
 void pbdrv_timer_handler(void) {
     pbdrv_clock_ticks++;
+    void debug_puts(const char *s);
+    // debug_puts("timer");
     etimer_request_poll();
 }
 

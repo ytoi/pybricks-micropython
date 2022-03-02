@@ -31,7 +31,9 @@ enum {
     COUNTER_PORT_C,
     COUNTER_PORT_D,
     COUNTER_PORT_E,
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
     COUNTER_PORT_F,
+#endif
 };
 
 enum {
@@ -66,7 +68,9 @@ enum {
     UART_PORT_C,
     UART_PORT_D,
     UART_PORT_E,
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
     UART_PORT_F,
+#endif
 };
 
 // Bluetooth
@@ -189,6 +193,7 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
             .uart_rx = { .bank = GPIOE, .pin = 2  },
             .alt = GPIO_AF11_UART10,
         },
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
         // Port F
         {
             .id1 = { .bank = GPIOC, .pin = 11 },
@@ -198,6 +203,7 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
             .uart_rx = { .bank = GPIOD, .pin = 14 },
             .alt = GPIO_AF11_UART9,
         },
+#endif
     },
 };
 
@@ -461,10 +467,12 @@ const pbdrv_uart_stm32f4_ll_irq_platform_data_t
         .uart = UART10,
         .irq = UART10_IRQn,
     },
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
     [UART_PORT_F] = {
         .uart = UART9,
         .irq = UART9_IRQn,
     },
+#endif
 };
 
 // overrides weak function in setup.m
@@ -488,9 +496,11 @@ void UART8_IRQHandler(void) {
 }
 
 // overrides weak function in setup.m
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
 void UART9_IRQHandler(void) {
     pbdrv_uart_stm32f4_ll_irq_handle_irq(UART_PORT_F);
 }
+#endif
 
 // overrides weak function in setup.m
 void UART10_IRQHandler(void) {
@@ -518,10 +528,12 @@ const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDE
         .uart_id = UART_PORT_E,
         .counter_id = COUNTER_PORT_E,
     },
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
     [COUNTER_PORT_F] = {
         .uart_id = UART_PORT_F,
         .counter_id = COUNTER_PORT_F,
     },
+#endif
 };
 
 
@@ -672,8 +684,8 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
-    HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+    // HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
+    // HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
 }
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
@@ -704,10 +716,10 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
         gpio_init.Alternate = GPIO_AF9_I2C2;
         HAL_GPIO_Init(GPIOB, &gpio_init);
 
-        HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
-        HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
-        HAL_NVIC_SetPriority(I2C2_EV_IRQn, 3, 2);
-        HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
+        // HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
+        // HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
+        // HAL_NVIC_SetPriority(I2C2_EV_IRQn, 3, 2);
+        // HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
     }
 }
 
@@ -726,7 +738,7 @@ void I2C2_EV_IRQHandler(void) {
 // special memory addresses defined in linker script
 extern uint32_t *_fw_isr_vector_src;
 
-// Called from assembly code in startup.s
+// Called from hardware_init_hook() in asp3/target/primehub_gcc/target_kernel_impl.c
 void SystemInit(void) {
     // enable 8-byte stack alignment for IRQ handlers, in accord with EABI
     SCB->CCR |= SCB_CCR_STKALIGN_Msk;

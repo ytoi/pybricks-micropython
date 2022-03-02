@@ -127,7 +127,8 @@ CFLAGS += -fsingle-precision-constant -Wdouble-promotion
 ifeq ($(DEBUG), 1)
 CFLAGS += -O0 -ggdb
 else
-CFLAGS += -Os -DNDEBUG
+CFLAGS += -Os -g
+# CFLAGS += -Os -DNDEBUG
 CFLAGS += -fdata-sections -ffunction-sections
 endif
 

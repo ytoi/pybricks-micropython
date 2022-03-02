@@ -32,6 +32,8 @@ PROCESS_THREAD(pbsys_process, ev, data) {
         pbsys_hmi_handle_event(ev, data);
         if (ev == PROCESS_EVENT_TIMER && etimer_expired(&timer)) {
             etimer_reset(&timer);
+            void debug_puts(const char *s);
+            debug_puts("pbsys_process periodical routine");
             pbsys_battery_poll();
             pbsys_hmi_poll();
             pbsys_io_ports_poll();

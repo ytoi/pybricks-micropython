@@ -228,6 +228,8 @@ do_poll(void)
   struct process *p;
 
   poll_requested = 0;
+  void pb_can_wup(void);
+  pb_can_wup();
   /* Call the processes that needs to be polled. */
   for(p = process_list; p != NULL; p = p->next) {
     if(p->needspoll) {
@@ -376,6 +378,13 @@ process_poll(struct process *p)
        p->state == PROCESS_STATE_CALLED) {
       p->needspoll = 1;
       poll_requested = 1;
+      
+      // void debug_put(void);
+      // void debug_puts(const char *s);
+      // debug_put();
+      
+      void pb_wup_tsk(void);
+      pb_wup_tsk();
     }
   }
 }
