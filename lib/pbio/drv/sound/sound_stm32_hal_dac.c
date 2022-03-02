@@ -9,6 +9,10 @@
 
 #include <stdint.h>
 
+#if PBIO_ON_ASP3
+#include <kernel.h>
+#endif
+
 #include "sound_stm32_hal_dac.h"
 
 #include STM32_HAL_H
@@ -67,8 +71,12 @@ void pbdrv_sound_init(void) {
 
     HAL_TIM_Base_Start(&pbdrv_sound_htim);
 
+    #if PBIO_ON_ASP3
+    ena_int(pdata->dma_irq);
+    #else
     HAL_NVIC_SetPriority(pdata->dma_irq, 4, 0);
     HAL_NVIC_EnableIRQ(pdata->dma_irq);
+    #endif
 }
 
 void pbdrv_sound_start(const uint16_t *data, uint32_t length, uint32_t sample_rate) {

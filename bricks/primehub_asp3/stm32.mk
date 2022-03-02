@@ -7,6 +7,7 @@
 
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
 PBTOP := ../../
+ASP3TOP := $(PBTOP)../asp3
 
 # ensure required git submodules checked out
 ifeq ("$(wildcard $(PBTOP)/micropython/README.md)","")
@@ -77,6 +78,10 @@ INC += -I$(TOP)/lib/stm32lib/CMSIS/STM32$(PB_MCU_SERIES)xx/Include
 ifeq ($(PB_USE_HAL),1)
 INC += -I$(TOP)/lib/stm32lib/STM32$(PB_MCU_SERIES)xx_HAL_Driver/Inc
 endif
+#INC += -I$(ASP3TOP)/arch/gcc
+#INC += -I$(ASP3TOP)/include
+#INC += -I$(ASP3TOP)/target/primehub_gcc
+INC += -I$(PBTOP)/lib/asp3/
 INC += -I$(PBTOP)/lib/contiki-core
 INC += -I$(PBTOP)/lib/lego
 INC += -I$(PBTOP)/lib/libfixmath/libfixmath

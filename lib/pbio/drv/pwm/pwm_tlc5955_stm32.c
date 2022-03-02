@@ -13,6 +13,10 @@
 
 #include <contiki.h>
 
+#if PBIO_ON_ASP3
+#include <kernel.h>
+#endif
+
 #include STM32_HAL_H
 
 #include <pbdrv/pwm.h>
@@ -194,8 +198,12 @@ void pbdrv_pwm_tlc5955_stm32_init(pbdrv_pwm_dev_t *devs) {
         priv->hdma_rx.Init.PeriphBurst = DMA_PBURST_SINGLE;
         HAL_DMA_Init(&priv->hdma_rx);
 
+        #if PBIO_ON_ASP3
+        ena_int(pdata->pdata->rx_dma_irq);
+        #else
         HAL_NVIC_SetPriority(pdata->rx_dma_irq, 7, 0);
         HAL_NVIC_EnableIRQ(pdata->rx_dma_irq);
+        #endif
 
         priv->hdma_tx.Instance = pdata->tx_dma;
         priv->hdma_tx.Init.Channel = pdata->tx_dma_ch;
@@ -211,8 +219,13 @@ void pbdrv_pwm_tlc5955_stm32_init(pbdrv_pwm_dev_t *devs) {
         priv->hdma_tx.Init.PeriphBurst = DMA_PBURST_SINGLE;
         HAL_DMA_Init(&priv->hdma_tx);
 
+        #if PBIO_ON_ASP3
+        ena_int(pdata->pdata->tx_dma_irq);
+        #else
         HAL_NVIC_SetPriority(pdata->tx_dma_irq, 7, 1);
         HAL_NVIC_EnableIRQ(pdata->tx_dma_irq);
+        #endif
+
 
         priv->hspi.Instance = pdata->spi;
         priv->hspi.Init.Mode = SPI_MODE_MASTER;
@@ -231,8 +244,12 @@ void pbdrv_pwm_tlc5955_stm32_init(pbdrv_pwm_dev_t *devs) {
         __HAL_LINKDMA(&priv->hspi, hdmarx, priv->hdma_rx);
         __HAL_LINKDMA(&priv->hspi, hdmatx, priv->hdma_tx);
 
+        #if PBIO_ON_ASP3
+        ena_int(pdata->spi_irq);
+        #else
         HAL_NVIC_SetPriority(pdata->spi_irq, 7, 2);
         HAL_NVIC_EnableIRQ(pdata->spi_irq);
+        #endif
 
         PT_INIT(&priv->pt);
         priv->pwm = pwm;

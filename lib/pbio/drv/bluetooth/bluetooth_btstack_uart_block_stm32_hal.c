@@ -12,6 +12,11 @@
 
 #include <btstack.h>
 #undef UNUSED // btstack and stm32 both define UNUSED
+
+#if PBIO_ON_ASP3
+#include <kernel.h>
+#endif
+
 #include <stm32f4xx_hal.h>
 #include <stm32f4xx_ll_rcc.h>
 #include <stm32f4xx_ll_usart.h>
@@ -95,12 +100,18 @@ static int btstack_uart_block_stm32_hal_init(const btstack_uart_config_t *config
     __HAL_LINKDMA(&btstack_huart, hdmatx, btstack_tx_hdma);
     __HAL_LINKDMA(&btstack_huart, hdmarx, btstack_rx_hdma);
 
+    #if PBIO_ON_ASP3
+    ena_int(pdata->tx_dma_irq);
+    ena_int(pdata->rx_dma_irq);
+    ena_int(pdata->uart_irq);
+    #else
     HAL_NVIC_SetPriority(pdata->tx_dma_irq, 1, 2);
     HAL_NVIC_EnableIRQ(pdata->tx_dma_irq);
     HAL_NVIC_SetPriority(pdata->rx_dma_irq, 1, 1);
     HAL_NVIC_EnableIRQ(pdata->rx_dma_irq);
     HAL_NVIC_SetPriority(pdata->uart_irq, 1, 0);
     HAL_NVIC_EnableIRQ(pdata->uart_irq);
+    #endif
 
     return 0;
 }

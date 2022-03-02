@@ -24,6 +24,10 @@
 #include "./uart_stm32f4_ll_irq.h"
 #include "../../src/processes.h"
 
+#if PBIO_ON_ASP3
+#include <kernel.h>
+#endif
+
 #define RX_DATA_SIZE 64 // must be power of 2 for ring buffer!
 
 typedef struct {
@@ -245,7 +249,12 @@ static void handle_exit(void) {
     for (int i = 0; i < PBDRV_CONFIG_UART_STM32F4_LL_IRQ_NUM_UART; i++) {
         const pbdrv_uart_stm32f4_ll_irq_platform_data_t *pdata = &pbdrv_uart_stm32f4_ll_irq_platform_data[i];
         LL_USART_Disable(pdata->uart);
+        
+        #if PBIO_ON_ASP3
+        dis_int(pdata->irq);
+        #else
         NVIC_DisableIRQ(pdata->irq);
+        #endif
     }
 }
 
@@ -276,8 +285,12 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         LL_USART_ConfigAsyncMode(pdata->uart);
         LL_USART_EnableIT_RXNE(pdata->uart);
 
+        #if PBIO_ON_ASP3
+        ena_int(pdata->irq);
+        #else
         NVIC_SetPriority(pdata->irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
         NVIC_EnableIRQ(pdata->irq);
+        #endif
 
         // start receiving as soon as everything is configured
         LL_USART_Enable(pdata->uart);

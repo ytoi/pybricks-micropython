@@ -28,6 +28,10 @@
 
 #include <contiki.h>
 
+#if PBIO_ON_ASP3
+#include <kernel.h>
+#endif
+
 #include <pbio/error.h>
 #include <pbio/util.h>
 
@@ -73,7 +77,12 @@ static void pbdrv_adc_poll(void) {
 }
 
 static void pbdrv_adc_exit(void) {
+    #if PBIO_ON_ASP3
+    dis_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ)
+    #else
     HAL_NVIC_DisableIRQ(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ);
+    #endif
+
     HAL_TIM_Base_Stop(&pbdrv_adc_htim);
     HAL_TIM_Base_DeInit(&pbdrv_adc_htim);
     HAL_ADC_Stop_DMA(&pbdrv_adc_hadc);
@@ -144,8 +153,13 @@ PROCESS_THREAD(pbdrv_adc_process, ev, data) {
     #endif
 
     __HAL_LINKDMA(&pbdrv_adc_hadc, DMA_Handle, pbdrv_adc_hdma);
+    
+    #if PBIO_ON_ASP3
+    ena_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ)
+    #else
     HAL_NVIC_SetPriority(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ, 7, 0);
     HAL_NVIC_EnableIRQ(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ);
+    #endif
     HAL_ADC_Start_DMA(&pbdrv_adc_hadc, pbdrv_adc_dma_buffer, PBIO_ARRAY_SIZE(pbdrv_adc_dma_buffer));
     HAL_TIM_Base_Start(&pbdrv_adc_htim);
 

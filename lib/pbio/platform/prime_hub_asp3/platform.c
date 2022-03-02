@@ -5,10 +5,15 @@
 
 #include <btstack_chipset_cc256x.h>
 #undef UNUSED
+
 #include <stm32f4xx_hal.h>
 
 #include "pbio/uartdev.h"
 #include "pbio/light_matrix.h"
+
+#if PBIO_ON_ASP3
+#include <kernel.h>
+#endif
 
 #include "../../drv/adc/adc_stm32_hal.h"
 #include "../../drv/bluetooth/bluetooth_btstack_control_gpio.h"
@@ -684,12 +689,20 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    // HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
-    // HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+    #if PBIO_ON_ASP3
+    ena_int(OTG_FS_IRQn);
+    #else
+    HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
+    HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+    #endif
 }
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
+    #if PBIO_ON_ASP3
+    dis_int(OTG_FS_IRQn);
+    #else
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
+    #endif
 }
 
 void OTG_FS_IRQHandler(void) {
@@ -716,10 +729,15 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
         gpio_init.Alternate = GPIO_AF9_I2C2;
         HAL_GPIO_Init(GPIOB, &gpio_init);
 
-        // HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
-        // HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
-        // HAL_NVIC_SetPriority(I2C2_EV_IRQn, 3, 2);
-        // HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
+        #if PBIO_ON_ASP3
+        ena_int(I2C2_ER_IRQn);
+        ena_int(I2C2_EV_IRQn);
+        #else
+        HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
+        HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
+        HAL_NVIC_SetPriority(I2C2_EV_IRQn, 3, 2);
+        HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
+        #endif
     }
 }
 
