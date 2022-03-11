@@ -40,10 +40,7 @@ static pbio_error_t pbio_dcmotor_setup(pbio_dcmotor_t *dcmotor, pbio_direction_t
     }
 
     // Load settings for this motor
-    err = pbio_dcmotor_load_settings(dcmotor, dcmotor->id);
-    if (err != PBIO_SUCCESS) {
-        return err;
-    }
+    dcmotor->max_voltage = pbio_dcmotor_get_max_voltage(dcmotor->id);
 
     // Set direction and state
     dcmotor->direction = direction;
@@ -130,6 +127,11 @@ void pbio_dcmotor_get_settings(pbio_dcmotor_t *dcmotor, int32_t *max_voltage) {
 }
 
 pbio_error_t pbio_dcmotor_set_settings(pbio_dcmotor_t *dcmotor, int32_t max_voltage) {
+    // New maximum voltage must be positive and at or below hardware limit.
+    if (max_voltage < 0 || max_voltage > pbio_dcmotor_get_max_voltage(dcmotor->id)) {
+        return PBIO_ERROR_INVALID_ARG;
+    }
+    // Set the new value.
     dcmotor->max_voltage = max_voltage;
     return PBIO_SUCCESS;
 }

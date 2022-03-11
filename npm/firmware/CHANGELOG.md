@@ -1,4 +1,16 @@
 
+## 4.13.0 - 2021-11-19
+### Changed
+- Dropped fallback to default name in `encodeHubName()` on empty string.
+- Use Typescript optional syntax in `FirmwareMetadata` instead of `| undefined`.
+
+## 4.13.0-rc.1 - 2021-11-19
+### Added
+- Added support for v1.1.0 metadata.
+- Added `encodeHubName()` function.
+### Changed
+- Updated firmware to v3.1.0c1.
+
 ## 4.13.0-beta.1 - 2021-09-21
 ### Changed
 - Updated dependencies.

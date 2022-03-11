@@ -4,21 +4,50 @@
 
 ## [Unreleased]
 
+## [3.1.0] - 2021-12-16
+
+### Changed
+- Renamed new `DCMotor.dc_settings()` method to `DCMotor.settings()` ([support#536]).
+
+### Fixed
+- Fixed direction for `DriveBase.turn()` and `Drivebase.curve()` for some
+  arguments ([support#535]).
+- Fixed `then=Stop.COAST` not working in `DriveBase` methods ([support#535]).
+
+[support#535]: https://github.com/pybricks/support/issues/535
+[support#536]: https://github.com/pybricks/support/issues/536
+
+## [3.1.0c1] - 2021-11-19
+
+### Added
+- Added `DriveBase.curve()` method to drive an arc segment.
+- Added `then` and `wait` arguments to `DriveBase` methods ([support#57]).
+
 ### Changed
 - Dropped `integral_range` argument from `Control.pid()`. This setting was
   ineffective and never used. When set incorrectly, the motor could get stuck
   for certain combinations of `kp` and `ki`.
 - Improved motor behavior for cases with low-speed, low-load, but high
   inertia ([support#366]).
+- Changed how the duty cycle limit is set for `Motor` and `DCMotor`. It is now
+  set as a voltage limit via a dedicated method, instead of `Motor.control`.
 
 ### Fixed
 - Fixed `then=Stop.COAST` being ignored in most motor commands.
 - Fixed `brake()`/`light.off()` not working on Move hub I/O port C ([support#501]).
+- Fixed `Remote()` failing to connect when hub is connected to 2019 or newer
+  MacBooks ([support#397]).
+- Fixed intermittent improper detection of hot-plugged I/O devices ([support#500]).
+- A program now stops when a `Motor` is unplugged while it is running, instead
+  of getting in a bad state.
 
+[support#57]: https://github.com/pybricks/support/issues/57
 [support#366]: https://github.com/pybricks/support/issues/366
+[support#397]: https://github.com/pybricks/support/issues/397
+[support#500]: https://github.com/pybricks/support/issues/500
 [support#501]: https://github.com/pybricks/support/issues/501
 
-## [3.1.0b1] - 2021-08-21
+## [3.1.0b1] - 2021-09-21
 
 ### Added
 - Support for LEGO Technic Color Light Matrix ([support#440]).
@@ -171,7 +200,9 @@ Prerelease changes are documented at [support#48].
 
 
 <!-- diff links for headers -->
-[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.1.0b1...HEAD
+[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0c1...v3.1.0
+[3.1.0c1]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0a4...v3.1.0c1
 [3.1.0b1]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0a4...v3.1.0b1
 [3.1.0a4]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0a3...v3.1.0a4
 [3.1.0a3]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0a2...v3.1.0a3

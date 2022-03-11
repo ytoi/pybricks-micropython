@@ -1119,6 +1119,26 @@ static void handle_event(uint8_t *packet) {
                         // we currently only allow connection from one central
                         conn_handle = (data[11] << 8) | data[10];
                         DBG("link: %04x", conn_handle);
+
+                        // On 2019 and newer MacBooks, the default interval was
+                        // measured to be 15 ms. This caused advertisement to
+                        // not be received by the local Bluetooth chip when
+                        // scanning for devices. Calling the command below
+                        // effectively sends the L2CAP Connection Parameter
+                        // Update Request suggested by Apple[1] to reduce the
+                        // interval to presumably make more room for receiving
+                        // advertising data. There are a number of requirements
+                        // in the Apple spec, such as the interval must be a
+                        // multiple of 15 ms.
+                        // [1]: https://developer.apple.com/accessories/Accessory-Design-Guidelines.pdf
+                        gapUpdateLinkParamReq_t req = {
+                            .connectionHandle = conn_handle,
+                            .intervalMin = 24, // 24 * 1.25 ms = 30 ms
+                            .intervalMax = 48, // 48 * 1.25 ms = 60 ms
+                            .connLatency = 0,
+                            .connTimeout = 500, // 500 * 10 ms = 5 s
+                        };
+                        GAP_UpdateLinkParamReq(&req);
                     } else if (data[12] == GAP_PROFILE_CENTRAL) {
                         // we currently only allow connection to one LEGO Powered Up remote peripheral
                         remote_handle = (data[11] << 8) | data[10];
@@ -1280,14 +1300,14 @@ static PT_THREAD(gap_init(struct pt *pt)) {
     PT_WAIT_UNTIL(pt, hci_command_status);
     // ignoring response data
 
-    // Set scan timeout on btchip to infinite. Seperate timeout
+    // Set scan timeout on btchip to infinite. Separate timeout
     // is implemented to stop program and thus scan
     PT_WAIT_WHILE(pt, write_xfer_size);
     GAP_SetParamValue(TGAP_GEN_DISC_SCAN, 0);
     PT_WAIT_UNTIL(pt, hci_command_status);
     // ignoring response data
 
-    // Set scan timeout on btchip to infinite. Seperate timeout
+    // Set scan timeout on btchip to infinite. Separate timeout
     // is implemented to stop program and thus scan
     PT_WAIT_WHILE(pt, write_xfer_size);
     GAP_SetParamValue(TGAP_LIM_DISC_SCAN, 0);
@@ -1373,6 +1393,11 @@ static PT_THREAD(gap_init(struct pt *pt)) {
     PT_WAIT_UNTIL(pt, hci_command_status);
     // ignoring response data
 
+    PT_WAIT_WHILE(pt, write_xfer_size);
+    GAP_deviceInit(GAP_PROFILE_PERIPHERAL | GAP_PROFILE_CENTRAL, 8, NULL, NULL, 0);
+    PT_WAIT_UNTIL(pt, hci_command_complete);
+    // ignoring response data
+
     PT_END(pt);
 }
 
@@ -1397,13 +1422,6 @@ static PT_THREAD(hci_init(struct pt *pt)) {
 
     PT_WAIT_WHILE(pt, write_xfer_size);
     HCI_readBdaddr();
-    PT_WAIT_UNTIL(pt, hci_command_complete);
-    // ignoring response data
-
-    // init GATT layer
-
-    PT_WAIT_WHILE(pt, write_xfer_size);
-    GAP_deviceInit(GAP_PROFILE_PERIPHERAL | GAP_PROFILE_CENTRAL, 8, NULL, NULL, 0);
     PT_WAIT_UNTIL(pt, hci_command_complete);
     // ignoring response data
 
