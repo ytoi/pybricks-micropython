@@ -7,7 +7,7 @@
 
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
 PBTOP := ../../
-ASP3TOP := $(PBTOP)../asp3
+ASP3TOP := $(PBTOP)../../../
 
 # ensure required git submodules checked out
 ifeq ("$(wildcard $(PBTOP)/micropython/README.md)","")
@@ -48,7 +48,7 @@ include ../../micropython/py/mkenv.mk
 
 # qstr definitions (must come before including py.mk)
 QSTR_DEFS = ../pybricks_qstrdefs.h
-QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/stm32/configport.h
+QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/primehub_asp3/configport.h
 
 # MicroPython feature configurations
 MICROPY_ROM_TEXT_COMPRESSION ?= 1
@@ -119,11 +119,6 @@ CFLAGS = $(INC) -Wall -Werror -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB
 
 # define external oscillator frequency
 CFLAGS += -DHSE_VALUE=$(PB_MCU_EXT_OSC_HZ)
-
-# linker scripts
-LD_FILES = $(PBTOP)/bricks/stm32/common.ld
-
-LDFLAGS = -nostdlib $(addprefix -T,$(LD_FILES)) -Map=$@.map --cref --gc-sections
 
 # avoid doubles
 CFLAGS += -fsingle-precision-constant -Wdouble-promotion
@@ -243,7 +238,6 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	util_mp/pb_type_enum.c \
 	util_pb/pb_color_map.c \
 	util_pb/pb_conversions.c \
-	util_pb/pb_device_stm32.c \
 	util_pb/pb_error.c \
 	util_pb/pb_imu.c \
 	util_pb/pb_task.c \
@@ -552,18 +546,6 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_LIBM:.c=.o))
 ifeq ($(PB_LIB_STM32_USB_DEVICE),1)
 OBJ += $(addprefix $(BUILD)/, $(SRC_STM32_USB_DEV:.c=.o))
 endif
-ifeq ($(PB_INCLUDE_MAIN_MPY),1)
-OBJ += $(BUILD)/main.mpy.o
-endif
-
-$(BUILD)/main.mpy: main.py
-	$(ECHO) "MPY $<"
-	$(Q)$(MPY_CROSS) -o $@ $(MPY_CROSS_FLAGS) $<
-	$(ECHO) "`wc -c < $@` bytes"
-
-$(BUILD)/main.mpy.o: $(BUILD)/main.mpy
-	$(Q)$(OBJCOPY) -I binary -O elf32-littlearm -B arm \
-		--rename-section .data=.mpy,alloc,load,readonly,data,contents $^ $@
 
 # List of sources for qstr extraction
 SRC_QSTR += $(SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)

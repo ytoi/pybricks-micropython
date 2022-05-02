@@ -381,6 +381,7 @@ const pbdrv_pwm_stm32_tim_platform_data_t
     },
 };
 
+#if PBDRV_CONFIG_PWM_TLC5955_STM32
 const pbdrv_pwm_tlc5955_stm32_platform_data_t
     pbdrv_pwm_tlc5955_stm32_platform_data[PBDRV_CONFIG_PWM_TLC5955_STM32_NUM_DEV] = {
     {
@@ -397,6 +398,7 @@ const pbdrv_pwm_tlc5955_stm32_platform_data_t
         .id = PWM_DEV_5_TLC5955,
     },
 };
+#endif
 
 // Reset
 
@@ -544,13 +546,7 @@ const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDE
 
 // STM32 HAL integration
 
-// bootloader gives us 16MHz clock
-uint32_t SystemCoreClock = 16000000;
-
-// copied from system_stm32.c in stm32 port
-const uint8_t AHBPrescTable[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 6, 7, 8, 9 };
-const uint8_t APBPrescTable[8] = { 0, 0, 0, 0, 1, 2, 3, 4 };
-
+#if PBDRV_CONFIG_ADC
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
     GPIO_InitTypeDef gpio_init = { 0 };
     ADC_ChannelConfTypeDef adc_ch_config = { 0 };
@@ -643,7 +639,9 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
 void DMA2_Stream0_IRQHandler(void) {
     pbdrv_adc_stm32_hal_handle_irq();
 }
+#endif
 
+#if PBDRV_CONFIG_PWM_TLC5955_STM32
 void DMA2_Stream2_IRQHandler(void) {
     pbdrv_pwm_tlc5955_stm32_rx_dma_irq(0);
 }
@@ -669,9 +667,10 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
 void SPI1_IRQHandler(void) {
     pbdrv_pwm_tlc5955_stm32_spi_irq(0);
 }
+#endif
 
 // USB
-
+#if PBDRV_CONFIG_USB_STM32F4_CDC
 void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
@@ -709,6 +708,7 @@ void OTG_FS_IRQHandler(void) {
     extern PCD_HandleTypeDef hpcd;
     HAL_PCD_IRQHandler(&hpcd);
 }
+#endif
 
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
     GPIO_InitTypeDef gpio_init;
@@ -751,22 +751,15 @@ void I2C2_EV_IRQHandler(void) {
     mod_experimental_IMU_handle_i2c_ev_irq();
 }
 
-// Early initialization
-
-// special memory addresses defined in linker script
-extern uint32_t *_fw_isr_vector_src;
 
 // Called from hardware_init_hook() in asp3/target/primehub_gcc/target_kernel_impl.c
-void SystemInit(void) {
+void pb_SystemInit(void) {
     // enable 8-byte stack alignment for IRQ handlers, in accord with EABI
     SCB->CCR |= SCB_CCR_STKALIGN_Msk;
 
-    // since the firmware starts at 0x08008000, we need to set the vector table offset
-    SCB->VTOR = (uint32_t)&_fw_isr_vector_src;
-
     // bootloader disables interrupts
     __enable_irq();
-
+#if 0
     // Using external 16Mhz oscillator
     RCC_OscInitTypeDef osc_init;
     osc_init.OscillatorType = RCC_OSCILLATORTYPE_HSE;
@@ -792,6 +785,7 @@ void SystemInit(void) {
     clk_init.APB2CLKDivider = RCC_HCLK_DIV1; // 96MHz
 
     HAL_RCC_ClockConfig(&clk_init, FLASH_LATENCY_5);
+#endif
 
     // enable clocks
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN |
@@ -804,6 +798,7 @@ void SystemInit(void) {
         RCC_APB2ENR_UART10EN | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SYSCFGEN;
     RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
 
+#if 1
     // Keep main power on (PA13)
     GPIO_InitTypeDef gpio_init = {
         .Pin = GPIO_PIN_13,
@@ -811,4 +806,5 @@ void SystemInit(void) {
     };
     HAL_GPIO_Init(GPIOA, &gpio_init);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_13, GPIO_PIN_SET);
+#endif
 }

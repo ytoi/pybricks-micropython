@@ -3,8 +3,8 @@
 
 // BlueKitchen BTStack config
 
-#ifndef _PLATFORM_PRIME_HUB_BTSTACK_CONFIG_H_
-#define _PLATFORM_PRIME_HUB_BTSTACK_CONFIG_H_
+#ifndef _PLATFORM_PRIME_HUB_ASP3_BTSTACK_CONFIG_H_
+#define _PLATFORM_PRIME_HUB_ASP3_BTSTACK_CONFIG_H_
 
 // BTstack features that can be enabled
 #define ENABLE_BLE
