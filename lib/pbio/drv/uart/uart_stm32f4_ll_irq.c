@@ -251,7 +251,7 @@ static void handle_exit(void) {
         LL_USART_Disable(pdata->uart);
         
         #if PBIO_ON_ASP3
-        dis_int(pdata->irq);
+        dis_int(pdata->irq + 16);
         #else
         NVIC_DisableIRQ(pdata->irq);
         #endif
@@ -286,7 +286,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         LL_USART_EnableIT_RXNE(pdata->uart);
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->irq);
+        ena_int(pdata->irq + 16);
         #else
         NVIC_SetPriority(pdata->irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
         NVIC_EnableIRQ(pdata->irq);

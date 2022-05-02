@@ -199,7 +199,7 @@ void pbdrv_pwm_tlc5955_stm32_init(pbdrv_pwm_dev_t *devs) {
         HAL_DMA_Init(&priv->hdma_rx);
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->pdata->rx_dma_irq);
+        ena_int(pdata->pdata->rx_dma_irq + 16);
         #else
         HAL_NVIC_SetPriority(pdata->rx_dma_irq, 7, 0);
         HAL_NVIC_EnableIRQ(pdata->rx_dma_irq);
@@ -220,7 +220,7 @@ void pbdrv_pwm_tlc5955_stm32_init(pbdrv_pwm_dev_t *devs) {
         HAL_DMA_Init(&priv->hdma_tx);
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->pdata->tx_dma_irq);
+        ena_int(pdata->pdata->tx_dma_irq + 16);
         #else
         HAL_NVIC_SetPriority(pdata->tx_dma_irq, 7, 1);
         HAL_NVIC_EnableIRQ(pdata->tx_dma_irq);
@@ -245,7 +245,7 @@ void pbdrv_pwm_tlc5955_stm32_init(pbdrv_pwm_dev_t *devs) {
         __HAL_LINKDMA(&priv->hspi, hdmatx, priv->hdma_tx);
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->spi_irq);
+        ena_int(pdata->spi_irq + 16);
         #else
         HAL_NVIC_SetPriority(pdata->spi_irq, 7, 2);
         HAL_NVIC_EnableIRQ(pdata->spi_irq);

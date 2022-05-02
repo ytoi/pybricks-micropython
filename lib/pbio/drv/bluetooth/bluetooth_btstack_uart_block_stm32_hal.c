@@ -101,9 +101,9 @@ static int btstack_uart_block_stm32_hal_init(const btstack_uart_config_t *config
     __HAL_LINKDMA(&btstack_huart, hdmarx, btstack_rx_hdma);
 
     #if PBIO_ON_ASP3
-    ena_int(pdata->tx_dma_irq);
-    ena_int(pdata->rx_dma_irq);
-    ena_int(pdata->uart_irq);
+    ena_int(pdata->tx_dma_irq + 16);
+    ena_int(pdata->rx_dma_irq + 16);
+    ena_int(pdata->uart_irq + 16);
     #else
     HAL_NVIC_SetPriority(pdata->tx_dma_irq, 1, 2);
     HAL_NVIC_EnableIRQ(pdata->tx_dma_irq);

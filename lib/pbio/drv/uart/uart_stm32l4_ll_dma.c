@@ -384,9 +384,9 @@ static void handle_exit(void) {
         LL_DMA_DisableChannel(pdata->tx_dma, pdata->tx_dma_ch);
 
         #if PBIO_ON_ASP3
-        dis_int(pdata->uart_irq);
-        dis_int(pdata->rx_dma_irq);
-        dis_int(pdata->tx_dma_irq);
+        dis_int(pdata->uart_irq + 16);
+        dis_int(pdata->rx_dma_irq + 16);
+        dis_int(pdata->tx_dma_irq + 16);
         #else
         NVIC_DisableIRQ(pdata->uart_irq);
         NVIC_DisableIRQ(pdata->rx_dma_irq);
@@ -423,7 +423,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         LL_DMA_EnableIT_TC(pdata->tx_dma, pdata->tx_dma_ch);
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->tx_dma_irq);
+        ena_int(pdata->tx_dma_irq + 16);
         #else
         NVIC_SetPriority(pdata->tx_dma_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 2, 1));
         NVIC_EnableIRQ(pdata->tx_dma_irq);
@@ -447,7 +447,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         LL_DMA_EnableIT_TC(pdata->rx_dma, pdata->rx_dma_ch);
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->rx_dma_irq);
+        ena_int(pdata->rx_dma_irq + 16);
         #else
         NVIC_SetPriority(pdata->rx_dma_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 2, 0));
         NVIC_EnableIRQ(pdata->rx_dma_irq);
@@ -482,7 +482,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         }
 
         #if PBIO_ON_ASP3
-        ena_int(pdata->uart_irq);
+        ena_int(pdata->uart_irq + 16);
         #else
         NVIC_SetPriority(pdata->uart_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 1, 0));
         NVIC_EnableIRQ(pdata->uart_irq);

@@ -690,7 +690,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     #if PBIO_ON_ASP3
-    ena_int(OTG_FS_IRQn);
+    ena_int(OTG_FS_IRQn + 16);
     #else
     HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
@@ -699,7 +699,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
     #if PBIO_ON_ASP3
-    dis_int(OTG_FS_IRQn);
+    dis_int(OTG_FS_IRQn + 16);
     #else
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     #endif
@@ -730,8 +730,8 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
         HAL_GPIO_Init(GPIOB, &gpio_init);
 
         #if PBIO_ON_ASP3
-        ena_int(I2C2_ER_IRQn);
-        ena_int(I2C2_EV_IRQn);
+        ena_int(I2C2_ER_IRQn + 16);
+        ena_int(I2C2_EV_IRQn + 16);
         #else
         HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
         HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);

@@ -78,7 +78,7 @@ static void pbdrv_adc_poll(void) {
 
 static void pbdrv_adc_exit(void) {
     #if PBIO_ON_ASP3
-    dis_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ)
+    dis_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ + 16)
     #else
     HAL_NVIC_DisableIRQ(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ);
     #endif
@@ -155,7 +155,7 @@ PROCESS_THREAD(pbdrv_adc_process, ev, data) {
     __HAL_LINKDMA(&pbdrv_adc_hadc, DMA_Handle, pbdrv_adc_hdma);
     
     #if PBIO_ON_ASP3
-    ena_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ)
+    ena_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ + 16)
     #else
     HAL_NVIC_SetPriority(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ, 7, 0);
     HAL_NVIC_EnableIRQ(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ);
