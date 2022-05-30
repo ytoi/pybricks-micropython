@@ -240,23 +240,23 @@ static void pbdrv_stm32_usb_serial_receive(void) {
 //     return PBIO_SUCCESS;
 // }
 
-pbio_error_t pbsys_usb_stdout_put_char(uint8_t c) {
+bool pbsys_usb_stdout_put_char(uint8_t c) {
     if (!usb_connected) {
         // don't lock up print() when USB not connected - data is discarded
-        return PBIO_SUCCESS;
+        return false;
     }
     if (ringbuf_put(&stdout_buf, c) == 0) {
-        return PBIO_SUCCESS;
+        return false;
     }
-    return PBIO_SUCCESS;
+    return true;
 }
 
-pbio_error_t pbsys_usb_stdin_get_char(uint8_t *c) {
+bool pbsys_usb_stdin_get_char(uint8_t *c) {
     if (ringbuf_elements(&stdin_buf) == 0) {
-        return PBIO_ERROR_AGAIN;
+        return false;
     }
     *c = ringbuf_get(&stdin_buf);
-    return PBIO_SUCCESS;
+    return true;
 }
 
 PROCESS_THREAD(pbdrv_usb_process, ev, data) {
