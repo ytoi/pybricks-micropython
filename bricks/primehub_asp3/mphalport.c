@@ -55,37 +55,29 @@ void mp_hal_delay_us(mp_uint_t usec) {
     }
 }
 
+#define PYBRICKS_HUB_DEBUG (1)
+
+
 #if PYBRICKS_HUB_DEBUG
 
 #include "stm32f4xx.h"
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
-    uintptr_t ret = 0;
-
-    if ((poll_flags & MP_STREAM_POLL_RD) && USART6->SR & USART_SR_RXNE) {
-        ret |= MP_STREAM_POLL_RD;
-    }
-
-    return ret;
+    return MP_STREAM_POLL_RD;
 }
 
 // Receive single character
 int mp_hal_stdin_rx_chr(void) {
-    while (!(USART6->SR & USART_SR_RXNE)) {
-        MICROPY_VM_HOOK_LOOP
-    }
-
-    return USART6->DR;
+    return 0;
 }
 
 // Send string of given length
 void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
+    extern void low_putchar(char c);
     while (len--) {
-        while (!(USART6->SR & USART_SR_TXE)) {
-            MICROPY_VM_HOOK_LOOP
-        }
-        USART6->DR = *str++;
+        low_putchar(*str++);
     }
+    // serial_wri_dat(TASK_PORTID, str, len)
 }
 
 #else // !PYBRICKS_HUB_DEBUG

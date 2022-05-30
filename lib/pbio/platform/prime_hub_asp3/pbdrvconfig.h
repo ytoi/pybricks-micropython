@@ -53,7 +53,7 @@
 
 #define PBDRV_CONFIG_IOPORT                         (1)
 #define PBDRV_CONFIG_IOPORT_LPF2                    (1)
-#define PBDRV_CONFIG_IOPORT_LPF2_NUM_PORTS          (6)
+#define PBDRV_CONFIG_IOPORT_LPF2_NUM_PORTS          (5) //TODO
 #define PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT         PBIO_PORT_ID_A
 #define PBDRV_CONFIG_IOPORT_LPF2_LAST_PORT          PBIO_PORT_ID_E
 
