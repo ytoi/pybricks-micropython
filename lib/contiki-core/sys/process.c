@@ -377,12 +377,10 @@ process_poll(struct process *p)
       p->needspoll = 1;
       poll_requested = 1;
       
-      // void debug_put(void);
-      // void debug_puts(const char *s);
-      // debug_put();
-      
+#if PYBRICKS_ON_ASP3
       void pb_wup_tsk(void);
       pb_wup_tsk();
+#endif
     }
   }
 }
