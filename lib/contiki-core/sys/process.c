@@ -378,8 +378,8 @@ process_poll(struct process *p)
       poll_requested = 1;
       
 #if PYBRICKS_ON_ASP3
-      void pb_wup_tsk(void);
-      pb_wup_tsk();
+      void wup_pybricks(void);
+      wup_pybricks();
 #endif
     }
   }

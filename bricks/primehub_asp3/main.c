@@ -35,8 +35,8 @@ void pb_stm32_poll(void) {
     }
 
 #if 1
-    void pb_slp_tsk(void);
-    pb_slp_tsk();
+    void slp_pybricks(void);
+    slp_pybricks();
 #else
     // There is a possible race condition where an interupt occurs and sets the
     // Coniki poll_requested flag after all events have been processed. So we
