@@ -9,18 +9,11 @@
 #include <pbsys/status.h>
 #include <pbsys/user_program.h>
 
-// TODO: shutdown operation must be handle by asp3 kernel exit.
 static intptr_t pbsys_main_jmp_buf[5];
+
 static void pb_sys_main_check_for_shutdown(void) {
     if (pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN)) {
         pbio_set_event_hook(NULL);
-        for (;;) {
-            // We must handle all pending events before turning the power off the
-            // first time, otherwise the city hub turns itself back on sometimes.
-            while (pbio_do_one_event()) {
-            }
-            pbdrv_reset_power_off();
-        }
         __builtin_longjmp(pbsys_main_jmp_buf, 1);
     }
 }
