@@ -3,7 +3,7 @@
 
 #include "py/mpconfig.h"
 
-#if PYBRICKS_PY_COMMON_MOTORS
+#if PYBRICKS_PY_COMMON_LOGGER
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -12,6 +12,7 @@
 
 #include <pbio/config.h>
 #include <pbio/logger.h>
+#include <pbio/math.h>
 #include <pbio/servo.h>
 
 #include "py/obj.h"
@@ -37,8 +38,8 @@ STATIC mp_obj_t tools_Logger_start(size_t n_args, const mp_obj_t *pos_args, mp_m
         PB_ARG_DEFAULT_INT(divisor, 1));
 
     mp_int_t divisor = pb_obj_get_int(divisor_in);
-    divisor = max(divisor, 1);
-    mp_int_t rows = pb_obj_get_int(duration_in) / PBIO_CONTROL_LOOP_TIME_MS / divisor;
+    divisor = pbio_math_max(divisor, 1);
+    mp_int_t rows = pb_obj_get_int(duration_in) / PBIO_CONFIG_CONTROL_LOOP_TIME_MS / divisor;
     mp_int_t size = rows * pbio_logger_cols(self->log);
     self->buf = m_renew(int32_t, self->buf, self->size, size);
     self->size = size;
@@ -54,7 +55,8 @@ STATIC mp_obj_t tools_Logger_get(size_t n_args, const mp_obj_t *pos_args, mp_map
         tools_Logger_obj_t, self,
         PB_ARG_DEFAULT_NONE(index));
 
-    mp_int_t index = pb_obj_get_default_int(index_in, -1);
+    // Get index, or set to -1 if not given.
+    mp_int_t index = index_in == mp_const_none ? -1 : pb_obj_get_int(index_in);
 
     // Data buffer for this sample
     mp_obj_t ret[MAX_LOG_VALUES];
@@ -111,7 +113,7 @@ STATIC mp_obj_t tools_Logger_save(size_t n_args, const mp_obj_t *pos_args, mp_ma
         PB_ARG_DEFAULT_NONE(path));
     const char *path = path_in == mp_const_none ? "log.txt" : mp_obj_str_get_str(path_in);
 
-    #if PYBRICKS_HUB_EV3BRICK
+    #if PYBRICKS_PY_COMMON_LOGGER_REAL_FILE
     // Create an empty log file
     FILE *log_file;
 
@@ -122,7 +124,7 @@ STATIC mp_obj_t tools_Logger_save(size_t n_args, const mp_obj_t *pos_args, mp_ma
     }
     #else
     mp_printf(&mp_plat_print, "PB_OF:%s\n", path);
-    #endif // PYBRICKS_HUB_EV3BRICK
+    #endif // PYBRICKS_PY_COMMON_LOGGER_REAL_FILE
 
     // Read log size information
     int32_t data[MAX_LOG_VALUES];
@@ -131,7 +133,7 @@ STATIC mp_obj_t tools_Logger_save(size_t n_args, const mp_obj_t *pos_args, mp_ma
 
     uint8_t num_values = pbio_logger_cols(self->log);
     int32_t sampled = pbio_logger_rows(self->log);
-    pbio_error_t err;
+    pbio_error_t err = PBIO_SUCCESS;
 
     // Allocate space for one null-terminated row of data
     char row_str[max_val_strln * MAX_LOG_VALUES + 1];
@@ -148,7 +150,7 @@ STATIC mp_obj_t tools_Logger_save(size_t n_args, const mp_obj_t *pos_args, mp_ma
         // Make one string of values
         make_data_row_str(row_str, data, num_values);
 
-        #if PYBRICKS_HUB_EV3BRICK
+        #if PYBRICKS_PY_COMMON_LOGGER_REAL_FILE
         // Append the row to file
         if (fprintf(log_file, "%s", row_str) < 0) {
             err = PBIO_ERROR_IO;
@@ -157,20 +159,20 @@ STATIC mp_obj_t tools_Logger_save(size_t n_args, const mp_obj_t *pos_args, mp_ma
         #else
         // Print the row
         mp_print_str(&mp_plat_print, row_str);
-        #endif // PYBRICKS_HUB_EV3BRICK
+        #endif // PYBRICKS_PY_COMMON_LOGGER_REAL_FILE
 
         // Writing data can take a while, so give MicroPython some time too
         mp_handle_pending(true);
     }
 
-    #if PYBRICKS_HUB_EV3BRICK
+    #if PYBRICKS_PY_COMMON_LOGGER_REAL_FILE
     // Close the file
     if (fclose(log_file) != 0) {
         err = PBIO_ERROR_IO;
     }
     #else
     mp_print_str(&mp_plat_print, "PB_EOF\n");
-    #endif // PYBRICKS_HUB_EV3BRICK
+    #endif // PYBRICKS_PY_COMMON_LOGGER_REAL_FILE
 
     pb_assert(err);
     return mp_const_none;
@@ -211,4 +213,4 @@ mp_obj_t common_Logger_obj_make_new(pbio_log_t *log, uint8_t num_values) {
     return logger;
 }
 
-#endif // PYBRICKS_PY_COMMON_MOTORS
+#endif // PYBRICKS_PY_COMMON_LOGGER

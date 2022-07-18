@@ -7,182 +7,159 @@
 
 #include <inttypes.h>
 
+#include <pbdrv/counter.h>
+
+#include <pbio/angle.h>
 #include <pbio/math.h>
 #include <pbio/port.h>
 #include <pbio/tacho.h>
 
+/**
+ * The tacho module is a wrapper around a counter driver to provide rotation
+ * sensing with a configurable positive direction and zero point, without
+ * poking at hardware to reset it. The output angle is defined as:
+ *
+ *     angle = (raw_angle - zero_angle) * direction.
+ *
+ * Here direction is +1 if the tacho should increase for increasing raw angles
+ * or -1 if it should decrease for increasing raw angles.
+ */
 struct _pbio_tacho_t {
-    pbio_direction_t direction;
-    int32_t offset;
-    fix16_t counts_per_degree;
+    pbio_direction_t direction;  /**< Direction of tacho for increasing raw driver counts. */
+    pbio_angle_t zero_angle;     /**< Raw angle where tacho output angle reads zero. */
     pbdrv_counter_dev_t *counter;
 };
 
 static pbio_tacho_t tachos[PBDRV_CONFIG_NUM_MOTOR_CONTROLLER];
 
-static pbio_error_t pbio_tacho_reset_count(pbio_tacho_t *tacho, int32_t reset_count) {
-    int32_t count;
-    pbio_error_t err;
+/**
+ * Gets pointer to static tacho instance using port id.
+ *
+ * @param [in]  port        Port identifier.
+ * @param [out] tacho       Pointer to tacho object.
+ * @return                  Error code.
+ */
+pbio_error_t pbio_tacho_get_tacho(pbio_port_id_t port, pbio_tacho_t **tacho) {
+    // Validate port
+    if (port < PBDRV_CONFIG_FIRST_MOTOR_PORT || port > PBDRV_CONFIG_LAST_MOTOR_PORT) {
+        return PBIO_ERROR_INVALID_ARG;
+    }
 
-    // See pbio_tacho_get_count for a definition of count. Here we want to set
-    // the offset such that afterwards, count will equal reset_count. So:
-    // new_offset = raw_count * direction - reset_count
-    // which, given the definition of pbio_tacho_get_count, can be written as:
-    // new_offset = pbio_tacho_get_count + old_offset - reset_count
+    // Get pointer to tacho.
+    *tacho = &tachos[port - PBDRV_CONFIG_FIRST_MOTOR_PORT];
 
-    // First get the counter value with the existing offset subtracted.
-    err = pbio_tacho_get_count(tacho, &count);
+    // Get counter device
+    return pbdrv_counter_get_dev(port - PBDRV_CONFIG_FIRST_MOTOR_PORT, &((*tacho)->counter));
+}
+
+/**
+ * Gets the tacho angle.
+ *
+ * @param [in]  tacho       The tacho instance.
+ * @param [out] angle       Angle in millidegrees.
+ * @return                  Error code.
+ */
+pbio_error_t pbio_tacho_get_angle(pbio_tacho_t *tacho, pbio_angle_t *angle) {
+
+    // First, get the raw angle from the driver.
+    pbio_angle_t raw;
+    pbio_error_t err = pbdrv_counter_get_angle(tacho->counter, &raw.rotations, &raw.millidegrees);
     if (err != PBIO_SUCCESS) {
         return err;
     }
 
-    // Calculate the new offset
-    tacho->offset = count + tacho->offset - reset_count;
+    // Get angle offset by zero point.
+    pbio_angle_diff(&raw, &tacho->zero_angle, angle);
 
+    // Negate result depending on chosen positive direction.
+    if (tacho->direction == PBIO_DIRECTION_COUNTERCLOCKWISE) {
+        pbio_angle_neg(angle);
+    }
     return PBIO_SUCCESS;
 }
 
-static pbio_error_t pbio_tacho_reset_count_to_abs(pbio_tacho_t *tacho, int32_t *abs_count) {
+/**
+ * Resets the tacho angle to a given value.
+ *
+ * If @p reset_to_abs is true, the value will be reset to the absolute angle
+ * marked on the shaft if supported. In this case, @p reset_angle serves as an
+ * output so the caller knows which value it was reset to.
+ *
+ * @param [in]  tacho        The tacho instance.
+ * @param [in]  angle        Angle that tacho should now report in millidegrees.
+ * @param [in]  reset_to_abs If true, ignores @p angle and instead resets to
+ *                           absolute angle marked on shaft instead.
+ * @return                   Error code.
+ */
+pbio_error_t pbio_tacho_reset_angle(pbio_tacho_t *tacho, pbio_angle_t *angle, bool reset_to_abs) {
 
-    pbio_error_t err = pbdrv_counter_get_abs_count(tacho->counter, abs_count);
+    // If we reset to the absolute angle, we override the input angle. This
+    // then acts as an output, so the caller knows what it was reset to.
+    if (reset_to_abs) {
+        // Read the absolute angle.
+        pbio_error_t err = pbdrv_counter_get_abs_angle(tacho->counter, &angle->millidegrees);
+        if (err != PBIO_SUCCESS) {
+            return err;
+        }
+        // Negate the absolute value if requested.
+        if (tacho->direction == PBIO_DIRECTION_COUNTERCLOCKWISE) {
+            angle->millidegrees *= -1;
+        }
+        // Rotations is always zero for the absolute angle.
+        angle->rotations = 0;
+    }
+
+    // Next, get the raw angle from the driver.
+    pbio_angle_t raw;
+    pbio_error_t err = pbdrv_counter_get_angle(tacho->counter, &raw.rotations, &raw.millidegrees);
     if (err != PBIO_SUCCESS) {
         return err;
     }
 
+    // From the above definition, we can set the new zero point as:
+    //
+    //    zero_angle = raw_angle - angle / direction
+    //
     if (tacho->direction == PBIO_DIRECTION_COUNTERCLOCKWISE) {
-        *abs_count = -*abs_count;
+        // direction = -1, so as per above we should add.
+        pbio_angle_sum(&raw, angle, &tacho->zero_angle);
+    } else {
+        // direction = +1, so as per above we should subtract.
+        pbio_angle_diff(&raw, angle, &tacho->zero_angle);
     }
-
-    return pbio_tacho_reset_count(tacho, *abs_count);
+    return PBIO_SUCCESS;
 }
 
-static pbio_error_t pbio_tacho_setup(pbio_tacho_t *tacho, uint8_t counter_id, pbio_direction_t direction, fix16_t gear_ratio, bool reset_angle) {
-    // Assert that scaling factors are positive
-    if (gear_ratio < 0) {
-        return PBIO_ERROR_INVALID_ARG;
-    }
-    // Get overal ratio from counts to output variable, including gear train
-    tacho->counts_per_degree = fix16_mul(F16C(PBDRV_CONFIG_COUNTER_COUNTS_PER_DEGREE, 0), gear_ratio);
+/**
+ * Sets up the tacho instance to be used in an application.
+ *
+ * @param [in]  tacho       The tacho instance.
+ * @param [in]  direction   The direction of positive rotation.
+ * @param [in]  reset_angle If true, reset the current angle to the current
+ *                          absolute position if supported or 0. Otherwise it
+ *                          maintains its current value.
+ * @return                  Error code.
+ */
+pbio_error_t pbio_tacho_setup(pbio_tacho_t *tacho, pbio_direction_t direction, bool reset_angle) {
+
+    pbio_angle_t zero = {0};
 
     // Configure direction
     tacho->direction = direction;
 
-    // Get counter device
-    pbio_error_t err = pbdrv_counter_get_dev(counter_id, &tacho->counter);
-    if (err != PBIO_SUCCESS) {
-        return err;
-    }
-
     // If there's no need to reset the angle, we are done here.
     if (!reset_angle) {
         // We still do one test read to ensure a tacho exists.
-        int32_t test_count;
-        return pbio_tacho_get_count(tacho, &test_count);
+        return pbio_tacho_get_angle(tacho, &zero);
     }
 
-    // Reset count to absolute value if supported
-    int32_t abs_count;
-    err = pbio_tacho_reset_count_to_abs(tacho, &abs_count);
+    // Reset counter if requested. Try absolute reset first.
+    pbio_error_t err = pbio_tacho_reset_angle(tacho, &zero, true);
     if (err == PBIO_ERROR_NOT_SUPPORTED) {
-        // If not available, set it to 0
-        err = pbio_tacho_reset_count(tacho, 0);
+        // If not available, set it to 0.
+        err = pbio_tacho_reset_angle(tacho, &zero, false);
     }
     return err;
-}
-
-pbio_error_t pbio_tacho_get(pbio_port_id_t port, pbio_tacho_t **tacho, pbio_direction_t direction, fix16_t gear_ratio, bool reset_angle) {
-    // Validate port
-    if (port < PBDRV_CONFIG_FIRST_MOTOR_PORT || port > PBDRV_CONFIG_LAST_MOTOR_PORT) {
-        return PBIO_ERROR_INVALID_PORT;
-    }
-
-    // Get pointer to tacho
-    *tacho = &tachos[port - PBDRV_CONFIG_FIRST_MOTOR_PORT];
-
-    // FIXME: Make proper way to get counter id
-    uint8_t counter_id = port - PBDRV_CONFIG_FIRST_MOTOR_PORT;
-
-    // Initialize and set up tacho properties
-    return pbio_tacho_setup(*tacho, counter_id, direction, gear_ratio, reset_angle);
-}
-
-pbio_error_t pbio_tacho_get_count(pbio_tacho_t *tacho, int32_t *count) {
-
-    // In the tacho module, count is determined as:
-    // count = raw_count * direction - offset
-    // This is done in three steps below.
-    pbio_error_t err;
-
-    // Get raw counter value.
-    err = pbdrv_counter_get_count(tacho->counter, count);
-    if (err != PBIO_SUCCESS) {
-        return err;
-    }
-
-    // Set sign.
-    if (tacho->direction == PBIO_DIRECTION_COUNTERCLOCKWISE) {
-        *count = -*count;
-    }
-
-    // Subtract offset.
-    *count -= tacho->offset;
-
-    return PBIO_SUCCESS;
-}
-
-
-
-pbio_error_t pbio_tacho_get_angle(pbio_tacho_t *tacho, int32_t *angle) {
-    int32_t encoder_count;
-    pbio_error_t err;
-
-    err = pbio_tacho_get_count(tacho, &encoder_count);
-    if (err != PBIO_SUCCESS) {
-        return err;
-    }
-
-    *angle = pbio_math_div_i32_fix16(encoder_count, tacho->counts_per_degree);
-
-    return PBIO_SUCCESS;
-}
-
-pbio_error_t pbio_tacho_reset_angle(pbio_tacho_t *tacho, int32_t *reset_angle, bool reset_to_abs) {
-    if (reset_to_abs) {
-        pbio_error_t err = pbio_tacho_reset_count_to_abs(tacho, reset_angle);
-        *reset_angle = pbio_math_div_i32_fix16(*reset_angle, tacho->counts_per_degree);
-        return err;
-    } else {
-        return pbio_tacho_reset_count(tacho, pbio_math_mul_i32_fix16(*reset_angle, tacho->counts_per_degree));
-    }
-}
-
-pbio_error_t pbio_tacho_get_rate(pbio_tacho_t *tacho, int32_t *rate) {
-    pbio_error_t err;
-
-    err = pbdrv_counter_get_rate(tacho->counter, rate);
-    if (err != PBIO_SUCCESS) {
-        return err;
-    }
-
-    if (tacho->direction == PBIO_DIRECTION_COUNTERCLOCKWISE) {
-        *rate = -*rate;
-    }
-
-    return PBIO_SUCCESS;
-}
-
-pbio_error_t pbio_tacho_get_angular_rate(pbio_tacho_t *tacho, int32_t *angular_rate) {
-    int32_t encoder_rate;
-    pbio_error_t err;
-
-    err = pbio_tacho_get_rate(tacho, &encoder_rate);
-    if (err != PBIO_SUCCESS) {
-        return err;
-    }
-
-    *angular_rate = pbio_math_div_i32_fix16(encoder_rate, tacho->counts_per_degree);
-
-    return PBIO_SUCCESS;
 }
 
 #endif // PBIO_CONFIG_TACHO

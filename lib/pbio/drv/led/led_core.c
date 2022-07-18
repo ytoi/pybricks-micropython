@@ -14,6 +14,7 @@
 
 #include "led_dual.h"
 #include "led_pwm.h"
+#include "led_virtual.h"
 #include "led.h"
 
 #ifndef PBDRV_CONFIG_LED_NUM_DEV
@@ -25,6 +26,7 @@ static pbdrv_led_dev_t pbdrv_led_dev[PBDRV_CONFIG_LED_NUM_DEV];
 void pbdrv_led_init(void) {
     pbdrv_led_dual_init(pbdrv_led_dev);
     pbdrv_led_pwm_init(pbdrv_led_dev);
+    pbdrv_led_virtual_init(pbdrv_led_dev);
 }
 
 /**
@@ -34,7 +36,7 @@ void pbdrv_led_init(void) {
  * @param [out] dev     Pointer to the device instance
  * @return              ::PBIO_SUCCESS if the call was successful,
  *                      ::PBIO_ERROR_NO_DEV if the ID was invalid,
- *                      ::PBIO_ERROR_AGAIN if the device is not yet initalized
+ *                      ::PBIO_ERROR_AGAIN if the device is not yet initialized
  */
 pbio_error_t pbdrv_led_get_dev(uint8_t id, pbdrv_led_dev_t **dev) {
     if (id >= PBDRV_CONFIG_LED_NUM_DEV) {
@@ -44,7 +46,7 @@ pbio_error_t pbdrv_led_get_dev(uint8_t id, pbdrv_led_dev_t **dev) {
     *dev = &pbdrv_led_dev[id];
 
     if ((*dev)->funcs == NULL) {
-        // has not been intialized yet
+        // has not been initialized yet
         return PBIO_ERROR_AGAIN;
     }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2018-2021 The Pybricks Authors
 
 #include "py/mpconfig.h"
 
@@ -38,7 +38,7 @@ STATIC void pupdevices_ColorSensor__get_hsv_reflected(pb_device_t *pbdev, pbio_c
     };
 
     // Convert to HSV
-    color_map_rgb_to_hsv(&rgb, hsv);
+    pb_color_map_rgb_to_hsv(&rgb, hsv);
 }
 
 // pybricks._common.ColorSensor._get_hsv_ambient
@@ -154,7 +154,6 @@ MP_DEFINE_CONST_FUN_OBJ_1(pupdevices_ColorSensor_ambient_obj, pupdevices_ColorSe
 
 // dir(pybricks.pupdevices.ColorSensor)
 STATIC const mp_rom_map_elem_t pupdevices_ColorSensor_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_lights),      MP_ROM_ATTRIBUTE_OFFSET(pupdevices_ColorSensor_obj_t, lights)},
     { MP_ROM_QSTR(MP_QSTR_hsv),         MP_ROM_PTR(&pupdevices_ColorSensor_hsv_obj)                  },
     { MP_ROM_QSTR(MP_QSTR_color),       MP_ROM_PTR(&pupdevices_ColorSensor_color_obj)                },
     { MP_ROM_QSTR(MP_QSTR_reflection),  MP_ROM_PTR(&pupdevices_ColorSensor_reflection_obj)           },
@@ -163,12 +162,21 @@ STATIC const mp_rom_map_elem_t pupdevices_ColorSensor_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(pupdevices_ColorSensor_locals_dict, pupdevices_ColorSensor_locals_dict_table);
 
+STATIC const pb_attr_dict_entry_t pupdevices_ColorSensor_attr_dict[] = {
+    PB_DEFINE_CONST_ATTR_RO(MP_QSTR_lights, pupdevices_ColorSensor_obj_t, lights),
+};
+
 // type(pybricks.pupdevices.ColorSensor)
-const mp_obj_type_t pb_type_pupdevices_ColorSensor = {
-    { &mp_type_type },
-    .name = MP_QSTR_ColorSensor,
-    .make_new = pupdevices_ColorSensor_make_new,
-    .locals_dict = (mp_obj_dict_t *)&pupdevices_ColorSensor_locals_dict,
+const pb_obj_with_attr_type_t pb_type_pupdevices_ColorSensor = {
+    .type = {
+        .base = { .type = &mp_type_type },
+        .name = MP_QSTR_ColorSensor,
+        .make_new = pupdevices_ColorSensor_make_new,
+        .attr = pb_attribute_handler,
+        .locals_dict = (mp_obj_dict_t *)&pupdevices_ColorSensor_locals_dict,
+    },
+    .attr_dict = pupdevices_ColorSensor_attr_dict,
+    .attr_dict_size = MP_ARRAY_SIZE(pupdevices_ColorSensor_attr_dict),
 };
 
 #endif // PYBRICKS_PY_PUPDEVICES

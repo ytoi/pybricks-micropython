@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 #include <stdint.h>
 #include <stdio.h>
@@ -14,11 +14,13 @@
 
 #include <pybricks/common.h>
 #include <pybricks/util_mp/pb_obj_helper.h>
+#include <pybricks/util_pb/pb_flash.h>
 
 #include "shared/readline/readline.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/interrupt_char.h"
 #include "shared/runtime/pyexec.h"
+#include "py/builtin.h"
 #include "py/compile.h"
 #include "py/gc.h"
 #include "py/mperrno.h"
@@ -50,9 +52,9 @@ void pb_stm32_poll(void) {
 
     mp_handle_pending(true);
 
-    // There is a possible race condition where an interupt occurs and sets the
-    // Coniki poll_requested flag after all events have been processed. So we
-    // have a critical section where we disable interupts and check see if there
+    // There is a possible race condition where an interrupt occurs and sets the
+    // Contiki poll_requested flag after all events have been processed. So we
+    // have a critical section where we disable interrupts and check see if there
     // are any last second events. If not, we can call __WFI(), which still wakes
     // up the CPU on interrupt even though interrupts are otherwise disabled.
     mp_uint_t state = disable_irq();
@@ -81,9 +83,9 @@ static pbio_error_t wait_for_button_release(void) {
 }
 
 // Wait for data from an IDE
-static pbio_error_t get_message(uint8_t *buf, uint32_t rx_len, int32_t time_out) {
+static pbio_error_t get_message(uint8_t *buf, uint32_t rx_len, int time_out) {
     // Maximum time between two bytes/chunks
-    const int32_t time_interval = 500;
+    const mp_uint_t time_interval = 500;
 
     // Acknowledge at the end of each message or each data chunk
     const uint32_t chunk_size = 100;
@@ -146,7 +148,7 @@ static pbio_error_t get_message(uint8_t *buf, uint32_t rx_len, int32_t time_out)
         // Check if we have timed out
         if (rx_count == 0) {
             // Use given timeout for first byte
-            if (time_out != -1 && time_now - time_start > time_out) {
+            if (time_out >= 0 && time_now - time_start > (mp_uint_t)time_out) {
                 return PBIO_ERROR_TIMEDOUT;
             }
         } else if (time_now - time_start > time_interval) {
@@ -185,8 +187,32 @@ static uint32_t get_user_program(uint8_t **buf, uint32_t *free_len) {
 
     // If button was pressed, return code to run script in flash
     if (err == PBIO_ERROR_CANCELED) {
+        #if (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
+        // Open existing main.mpy file from flash
+        uint32_t size = 0;
+        if (pb_flash_file_open_get_size("/_pybricks/main.mpy", &size) != PBIO_SUCCESS) {
+            return 0;
+        }
+        // Check size and allocate buffer
+        if (size > MPY_MAX_BYTES) {
+            return 0;
+        }
+        *buf = m_malloc(size);
+        if (*buf == NULL) {
+            return 0;
+        }
+        // Read the file contents
+        if (pb_flash_file_read(*buf, size) != PBIO_SUCCESS) {
+            m_free(*buf);
+            return 0;
+        }
+        *free_len = size;
+        return size;
+        #else
+        // Load main program embedded in firmware
         *buf = &_pb_user_mpy_data;
         return _pb_user_mpy_size;
+        #endif
     }
 
     // Handle other errors
@@ -220,6 +246,12 @@ static uint32_t get_user_program(uint8_t **buf, uint32_t *free_len) {
     }
 
     *free_len = len;
+
+    #if (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
+    // Save program as file
+    pb_flash_file_write("/_pybricks/main.mpy", *buf, len);
+    #endif // (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
+
     return len;
 }
 
@@ -273,10 +305,6 @@ static void run_user_program(uint32_t len, uint8_t *buf, uint32_t free_len) {
 restart:
     // Hook into pbsys
     pbsys_user_program_prepare(&user_program_callbacks);
-    // make sure any pending events, e.g. starting status light pattern, are
-    // handled before starting MicroPython user program
-    while (pbio_do_one_event()) {
-    }
 
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
@@ -295,8 +323,10 @@ restart:
             // run user .mpy file
             mp_reader_t reader;
             mp_reader_new_mem(&reader, buf, len, free_len);
-            mp_raw_code_t *raw_code = mp_raw_code_load(&reader);
-            mp_obj_t module_fun = mp_make_function_from_raw_code(raw_code, MP_OBJ_NULL, MP_OBJ_NULL);
+            mp_module_context_t *context = m_new_obj(mp_module_context_t);
+            context->module.globals = mp_globals_get();
+            mp_compiled_module_t compiled_module = mp_raw_code_load(&reader, context);
+            mp_obj_t module_fun = mp_make_function_from_raw_code(compiled_module.rc, context, MP_OBJ_NULL);
             mp_hal_set_interrupt_char(CHAR_CTRL_C); // allow ctrl-C to interrupt us
             mp_call_function_0(module_fun);
             mp_hal_set_interrupt_char(-1); // disable interrupt
@@ -328,6 +358,12 @@ restart:
 }
 
 static void stm32_main(void) {
+
+    #if (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
+    mp_hal_delay_ms(500);
+    pb_flash_init();
+    #endif
+
 soft_reset:
     // Stack limit should be less than real stack size, so we have a chance
     // to recover from limit hit.  (Limit is measured in bytes.)

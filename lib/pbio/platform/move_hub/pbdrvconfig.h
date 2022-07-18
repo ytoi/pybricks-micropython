@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
-
-#ifndef _PBDRVCONFIG_H_
-#define _PBDRVCONFIG_H_
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 // platform-specific configuration for LEGO BOOST Move Hub
 
@@ -35,6 +32,8 @@
 #define PBDRV_CONFIG_COUNTER_NUM_DEV                (4)
 #define PBDRV_CONFIG_COUNTER_STM32F0_GPIO_QUAD_ENC  (1)
 #define PBDRV_CONFIG_COUNTER_STM32F0_GPIO_QUAD_ENC_NUM_DEV (2)
+#define PBDRV_CONFIG_COUNTER_LPF2                   (1)
+#define PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV           (2)
 
 #define PBDRV_CONFIG_GPIO                           (1)
 #define PBDRV_CONFIG_GPIO_STM32F0                   (1)
@@ -45,13 +44,16 @@
 #define PBDRV_CONFIG_IOPORT_LPF2_NUM_PORTS          (2)
 #define PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT         PBIO_PORT_ID_C
 #define PBDRV_CONFIG_IOPORT_LPF2_LAST_PORT          PBIO_PORT_ID_D
+#define PBDRV_CONFIG_IOPORT_LPF2_MOVE_HUB_HACK      (1)
 
 #define PBDRV_CONFIG_LED                            (1)
 #define PBDRV_CONFIG_LED_NUM_DEV                    (1)
 #define PBDRV_CONFIG_LED_PWM                        (1)
 #define PBDRV_CONFIG_LED_PWM_NUM_DEV                (1)
 
-#define PBDRV_CONFIG_MOTOR                          (1)
+#define PBDRV_CONFIG_MOTOR_DRIVER                   (1)
+#define PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV           (4)
+#define PBDRV_CONFIG_MOTOR_DRIVER_HBRIDGE_PWM       (1)
 
 #define PBDRV_CONFIG_PWM                            (1)
 #define PBDRV_CONFIG_PWM_NUM_DEV                    (4)
@@ -80,5 +82,3 @@
 #define PBDRV_CONFIG_NUM_MOTOR_CONTROLLER   (4)
 
 #define PBDRV_CONFIG_SYS_CLOCK_RATE 48000000
-
-#endif // _PBDRVCONFIG_H_

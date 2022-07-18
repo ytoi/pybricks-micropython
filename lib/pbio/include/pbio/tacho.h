@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
+
+/**
+ * @addtogroup Tacho pbio/tacho: Rotation sensor interface
+ *
+ * Extends a rotation sensor with a configurable positive direction and zero
+ * point without resetting hardware.
+ * @{
+ */
 
 #ifndef _PBIO_TACHO_H_
 #define _PBIO_TACHO_H_
 
 #include <stdint.h>
 
-#include <fixmath.h>
-
+#include <pbio/angle.h>
 #include <pbio/config.h>
 #include <pbdrv/counter.h>
 #include <pbio/dcmotor.h>
@@ -16,36 +23,32 @@ typedef struct _pbio_tacho_t pbio_tacho_t;
 
 #if PBIO_CONFIG_TACHO
 
-pbio_error_t pbio_tacho_get(pbio_port_id_t port, pbio_tacho_t **tacho, pbio_direction_t direction, fix16_t gear_ratio, bool reset_angle);
+pbio_error_t pbio_tacho_get_tacho(pbio_port_id_t port, pbio_tacho_t **tacho);
+pbio_error_t pbio_tacho_setup(pbio_tacho_t *tacho, pbio_direction_t direction, bool reset_angle);
 
-pbio_error_t pbio_tacho_get_count(pbio_tacho_t *tacho, int32_t *count);
-pbio_error_t pbio_tacho_get_angle(pbio_tacho_t *tacho, int32_t *angle);
-pbio_error_t pbio_tacho_reset_angle(pbio_tacho_t *tacho, int32_t *reset_angle, bool reset_to_abs);
-pbio_error_t pbio_tacho_get_rate(pbio_tacho_t *tacho, int32_t *encoder_rate);
-pbio_error_t pbio_tacho_get_angular_rate(pbio_tacho_t *tacho, int32_t *angular_rate);
+pbio_error_t pbio_tacho_get_angle(pbio_tacho_t *tacho, pbio_angle_t *angle);
+pbio_error_t pbio_tacho_reset_angle(pbio_tacho_t *tacho, pbio_angle_t *reset_angle, bool reset_to_abs);
 
 #else
 
-static inline pbio_error_t pbio_tacho_get(pbio_port_id_t port, pbio_tacho_t **tacho, pbio_direction_t direction, fix16_t gear_ratio) {
+static inline pbio_error_t pbio_tacho_get_tacho(pbio_port_id_t port, pbio_tacho_t **tacho) {
     return PBIO_ERROR_NOT_SUPPORTED;
 }
 
-static inline pbio_error_t pbio_tacho_get_count(pbio_tacho_t *tacho, int32_t *count) {
+static inline pbio_error_t pbio_tacho_setup(pbio_tacho_t *tacho, pbio_direction_t direction, bool reset_angle) {
     return PBIO_ERROR_NOT_SUPPORTED;
 }
-static inline pbio_error_t pbio_tacho_get_angle(pbio_tacho_t *tacho, int32_t *angle) {
+
+
+static inline pbio_error_t pbio_tacho_get_angle(pbio_tacho_t *tacho, pbio_angle_t *angle) {
     return PBIO_ERROR_NOT_SUPPORTED;
 }
-static inline pbio_error_t pbio_tacho_reset_angle(pbio_tacho_t *tacho, int32_t *reset_angle, bool reset_to_abs) {
-    return PBIO_ERROR_NOT_SUPPORTED;
-}
-static inline pbio_error_t pbio_tacho_get_rate(pbio_tacho_t *tacho, int32_t *encoder_rate) {
-    return PBIO_ERROR_NOT_SUPPORTED;
-}
-static inline pbio_error_t pbio_tacho_get_angular_rate(pbio_tacho_t *tacho, int32_t *angular_rate) {
+static inline pbio_tacho_reset_angle(pbio_tacho_t * tacho, pbio_angle_t * reset_angle, bool reset_to_abs) {
     return PBIO_ERROR_NOT_SUPPORTED;
 }
 
 #endif // PBIO_CONFIG_TACHO
 
 #endif // _PBIO_TACHO_H_
+
+/** @} */

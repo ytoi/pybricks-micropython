@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2013, 2014 Damien P. George
-# Copyright (c) 2019-2020 The Pybricks Authors
+# Copyright (c) 2019-2022 The Pybricks Authors
 
 # ensure required git submodules checked out
 ifeq ("$(wildcard ../../micropython/README.md)","")
@@ -39,10 +39,8 @@ USER_C_MODULES = ../..
 -include mpconfigport.mk
 include ../../micropython/py/mkenv.mk
 
-# use FROZEN_MANIFEST for new projects, others are legacy
+# Frozen Python code
 FROZEN_MANIFEST ?= manifest.py
-FROZEN_DIR =
-FROZEN_MPY_DIR =
 
 # define main target
 PROG = pybricks-micropython
@@ -72,18 +70,20 @@ INC += -I../..
 INC += -I$(TOP)/ports/unix
 
 # compiler settings
-CWARN = -Wall -Werror
-CWARN += -Wpointer-arith -Wuninitialized -Wdouble-promotion -Wsign-compare -Wfloat-conversion
-CFLAGS += $(INC) $(CWARN) -std=gnu99 -DUNIX $(CFLAGS_MOD) $(COPT) $(CFLAGS_EXTRA)
+CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-maybe-uninitialized
+CFLAGS_WARN += -Wpointer-arith -Wdouble-promotion -Wfloat-conversion
+CFLAGS += $(INC)-std=gnu99 -DUNIX $(CFLAGS_WARN) $(CFLAGS_MOD) $(COPT) $(CFLAGS_EXTRA)
 
 # Debugging/Optimization
 ifdef DEBUG
-COPT ?= -O0
+COPT ?= -Og
 else
 COPT ?= -Os
-COPT += -fdata-sections -ffunction-sections
 COPT += -DNDEBUG
 endif
+
+# Remove unused sections.
+COPT += -fdata-sections -ffunction-sections
 
 # Always enable symbols -- They're occasionally useful, and don't make it into the
 # final .bin/.hex/.dfu so the extra size doesn't matter.
@@ -139,7 +139,7 @@ LDFLAGS += $(LDFLAGS_MOD) $(LDFLAGS_ARCH) -lm $(LDFLAGS_EXTRA)
 LDFLAGS += -lpthread
 
 ifeq ($(MICROPY_USE_READLINE),1)
-INC +=  -I$(TOP)/shared/readline
+INC += -I$(TOP)/shared/readline
 CFLAGS_MOD += -DMICROPY_USE_READLINE=1
 SHARED_SRC_C_EXTRA += readline/readline.c
 endif
@@ -198,25 +198,23 @@ endif
 # if we don't do it this way. So we need to be very careful about name clashes
 # between the top level directory and the micropython/ subdirectory.
 
-SRC_C = $(addprefix ports/unix/,\
+SRC_C += $(addprefix ports/unix/,\
 	alloc.c \
 	coverage.c \
 	gccollect.c \
 	input.c \
 	main.c \
 	modmachine.c \
-	modos.c \
 	modtime.c \
 	modufcntl.c \
 	modummap.c \
-	moduos_vfs.c \
 	moduselect.c \
 	mpthreadport.c \
 	)
 
 SRC_C += $(SRC_MOD)
 
-SHARED_SRC_C = $(addprefix shared/,\
+SHARED_SRC_C += $(addprefix shared/,\
 	runtime/gchelper_generic.c \
 	runtime/pyexec.c \
 	timeutils/timeutils.c \
@@ -270,12 +268,12 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	parameters/pb_type_icon.c \
 	nxtdevices/pb_module_nxtdevices.c \
 	nxtdevices/pb_type_nxtdevices_colorsensor.c \
-    nxtdevices/pb_type_nxtdevices_energymeter.c \
-    nxtdevices/pb_type_nxtdevices_lightsensor.c \
-    nxtdevices/pb_type_nxtdevices_soundsensor.c \
-    nxtdevices/pb_type_nxtdevices_temperaturesensor.c \
-    nxtdevices/pb_type_nxtdevices_touchsensor.c \
-    nxtdevices/pb_type_nxtdevices_ultrasonicsensor.c \
+	nxtdevices/pb_type_nxtdevices_energymeter.c \
+	nxtdevices/pb_type_nxtdevices_lightsensor.c \
+	nxtdevices/pb_type_nxtdevices_soundsensor.c \
+	nxtdevices/pb_type_nxtdevices_temperaturesensor.c \
+	nxtdevices/pb_type_nxtdevices_touchsensor.c \
+	nxtdevices/pb_type_nxtdevices_ultrasonicsensor.c \
 	parameters/pb_module_parameters.c \
 	parameters/pb_type_button.c \
 	parameters/pb_type_color.c \
@@ -300,6 +298,7 @@ PYBRICKS_LIB_SRC_C = $(addprefix lib/,\
 	contiki-core/sys/etimer.c \
 	contiki-core/sys/process.c \
 	contiki-core/sys/timer.c \
+	ev3dev/src/ev3dev_stretch/lego_motor.c \
 	ev3dev/src/ev3dev_stretch/lego_port.c \
 	ev3dev/src/ev3dev_stretch/lego_sensor.c \
 	ev3dev/src/ev3dev_stretch/nxtcolor.c \
@@ -314,12 +313,14 @@ PYBRICKS_LIB_SRC_C = $(addprefix lib/,\
 	pbio/drv/core.c \
 	pbio/drv/counter/counter_core.c \
 	pbio/drv/counter/counter_ev3dev_stretch_iio.c \
-	pbio/drv/ev3dev_stretch/motor.c \
-	pbio/platform/motors/settings.c \
+	pbio/drv/ioport/ioport_ev3dev_stretch.c \
+	pbio/drv/motor_driver/motor_driver_ev3dev_stretch.c \
 	pbio/platform/ev3dev_stretch/status_light.c \
+	pbio/src/angle.c \
 	pbio/src/battery.c \
 	pbio/src/color/conversion.c \
 	pbio/src/control.c \
+	pbio/src/control_settings.c \
 	pbio/src/dcmotor.c \
 	pbio/src/drivebase.c \
 	pbio/src/error.c \
@@ -330,10 +331,11 @@ PYBRICKS_LIB_SRC_C = $(addprefix lib/,\
 	pbio/src/main.c \
 	pbio/src/math.c \
 	pbio/src/motor_process.c \
+	pbio/src/motor/servo_settings.c \
 	pbio/src/observer.c \
+	pbio/src/parent.c \
 	pbio/src/servo.c \
 	pbio/src/tacho.c \
-	pbio/src/trajectory_ext.c \
 	pbio/src/trajectory.c \
 	)
 
@@ -351,20 +353,17 @@ SRC_QSTR += $(SRC_C) $(SHARED_SRC_C) $(EXTMOD_SRC_C) $(PYBRICKS_SRC_C) $(PYBRICK
 # SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
-ifneq ($(FROZEN_MANIFEST)$(FROZEN_MPY_DIR),)
+ifneq ($(FROZEN_MANIFEST),)
 # To use frozen code create a manifest.py file with a description of files to
 # freeze, then invoke make with FROZEN_MANIFEST=manifest.py (be sure to build from scratch).
 CFLAGS += -DMICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
 CFLAGS += -DMICROPY_MODULE_FROZEN_MPY
 CFLAGS += -DMPZ_DIG_SIZE=16 # force 16 bits to work on both 32 and 64 bit archs
-MPY_CROSS_FLAGS += -mcache-lookup-bc
 endif
 
-ifneq ($(FROZEN_MANIFEST)$(FROZEN_DIR),)
+ifneq ($(FROZEN_MANIFEST),)
 CFLAGS += -DMICROPY_MODULE_FROZEN_STR
 endif
-
-RUN_TESTS_MPY_CROSS_FLAGS = --mpy-cross-flags='-mcache-lookup-bc'
 
 include $(TOP)/py/mkrules.mk
 
@@ -396,9 +395,17 @@ test-ev3dev: $(PROG) $(TOP)/tests/run-tests.py $(GRX_TEST_PLUGIN_LIB)
 
 test: $(PROG) $(TOP)/tests/run-tests.py $(GRX_TEST_PLUGIN_LIB)
 	$(eval DIRNAME=../bricks/$(notdir $(CURDIR)))
-	cd $(TOP)/tests && MICROPY_MICROPYTHON=../$(DIRNAME)/$(PROG) \
+	cd $(TOP)/tests && MICROPY_MICROPYTHON="../../tests/ev3dev/test-wrapper.sh" \
 		GRX_PLUGIN_PATH=$(realpath $(BUILD)) GRX_DRIVER=test \
 		./run-tests.py
+
+# Value of configure's --host= option (required for cross-compilation).
+# Deduce it from CROSS_COMPILE by default, but can be overridden.
+ifneq ($(CROSS_COMPILE),)
+CROSS_COMPILE_HOST = --host=$(patsubst %-,%,$(CROSS_COMPILE))
+else
+CROSS_COMPILE_HOST =
+endif
 
 PREFIX = /usr/local
 BINDIR = $(DESTDIR)$(PREFIX)/bin
@@ -409,11 +416,3 @@ install: $(PROG)
 
 uninstall:
 	-rm $(BINDIR)/$(PROG)
-
-# Value of configure's --host= option (required for cross-compilation).
-# Deduce it from CROSS_COMPILE by default, but can be overridden.
-ifneq ($(CROSS_COMPILE),)
-CROSS_COMPILE_HOST = --host=$(patsubst %-,%,$(CROSS_COMPILE))
-else
-CROSS_COMPILE_HOST =
-endif

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 // Common config for all Pybricks hubs/bricks
+
+// DO NOT include this file directly, use "py/mpconfig.h" instead!
 
 // Hub name
 #if PYBRICKS_HUB_CITYHUB
@@ -21,6 +23,8 @@
 /* TODO */
 #elif PYBRICKS_HUB_ESSENTIALHUB
 #define PYBRICKS_HUB_NAME "essentialhub"
+#elif PYBRICKS_HUB_VIRTUALHUB
+#define PYBRICKS_HUB_NAME "virtualhub"
 #elif !NO_QSTR // qstr generator runs preprocessor on this file directly
 #error "Unknown hub type"
 #endif

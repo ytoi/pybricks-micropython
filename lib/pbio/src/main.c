@@ -14,27 +14,25 @@
 #include <pbdrv/config.h>
 #include <pbdrv/core.h>
 #include <pbdrv/ioport.h>
-#include <pbdrv/motor.h>
 #include <pbdrv/sound.h>
 #include <pbio/config.h>
+#include <pbio/dcmotor.h>
 #include <pbio/light_matrix.h>
 #include <pbio/light.h>
 #include <pbio/main.h>
-#include <pbio/motor_process.h>
 #include <pbio/uartdev.h>
 
 #include "light/animation.h"
 #include "processes.h"
 
+// DO NOT ADD NEW PROCESSES HERE!
+// We are trying to remove the use of autostart.
 AUTOSTART_PROCESSES(
 #if PBDRV_CONFIG_ADC
     &pbdrv_adc_process,
 #endif
 #if PBDRV_CONFIG_UART
     &pbdrv_uart_process,
-#endif
-#if PBDRV_CONFIG_USB
-    &pbdrv_usb_process,
 #endif
 #if PBIO_CONFIG_UARTDEV
     &pbio_uartdev_process,
@@ -68,10 +66,7 @@ void pbio_stop_all(void) {
     #if PBIO_CONFIG_LIGHT
     pbio_light_animation_stop_all();
     #endif
-    #if PBDRV_CONFIG_IOPORT_LPF2
-    pbdrv_ioport_reset_passive_devices();
-    #endif
-    pbio_motor_process_reset();
+    pbio_dcmotor_stop_all(true);
     pbdrv_sound_stop();
 }
 

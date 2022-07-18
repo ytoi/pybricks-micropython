@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 /*
  * Based on:
  * LEGO MINDSTORMS EV3 UART Sensor tty line discipline
  *
  * Copyright (c) 2014-2016,2018-2019 David Lechner <david@lechnology.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- * This program is distributed "as is" WITHOUT ANY WARRANTY of any
- * kind, whether express or implied; without even the implied warranty
- * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
  * Relicensed under MIT license by author for Pybricks I/O library.
  * This file may be redistributed under either or both licenses.
@@ -49,8 +41,7 @@
 #include "pbio/port.h"
 #include "pbio/uartdev.h"
 #include "pbio/util.h"
-#include "../drv/counter/counter.h"
-#include <pbdrv/motor.h>
+#include <pbdrv/motor_driver.h>
 
 #define EV3_UART_MAX_MESSAGE_SIZE   (LUMP_MAX_MSG_SIZE + 3)
 
@@ -122,11 +113,18 @@ enum ev3_uart_info_flags {
  * Indicates the current state of the UART device.
  */
 typedef enum {
-    PBIO_UARTDEV_STATUS_ERR,        /**< Something bad happended */
-    PBIO_UARTDEV_STATUS_SYNCING,    /**< Waiting for data that looks like LEGO UART protocol */
-    PBIO_UARTDEV_STATUS_INFO,       /**< Reading device info before changing baud rate */
-    PBIO_UARTDEV_STATUS_ACK,        /**< ACK received, delay changing baud rate */
-    PBIO_UARTDEV_STATUS_DATA,       /**< Ready to send commands and receive data */
+    /** Something bad happened. */
+    PBIO_UARTDEV_STATUS_ERR,
+    /** Waiting for port to be placed in UART mode with device attached. */
+    PBIO_UARTDEV_STATUS_WAITING,
+    /**< Waiting for data that looks like LEGO UART protocol. */
+    PBIO_UARTDEV_STATUS_SYNCING,
+    /**< Reading device info before changing baud rate. */
+    PBIO_UARTDEV_STATUS_INFO,
+    /**< ACK received, delay changing baud rate. */
+    PBIO_UARTDEV_STATUS_ACK,
+    /**< Ready to send commands and receive data. */
+    PBIO_UARTDEV_STATUS_DATA,
 } pbio_uartdev_status_t;
 
 /**
@@ -147,16 +145,12 @@ typedef enum {
  * @new_baud_rate: New baud rate that will be set with ev3_uart_change_bitrate
  * @info_flags: Flags indicating what information has already been read
  *      from the data.
- * @tacho_count: The tacho count received from an LPF2 motor
- * @tacho_offset: Tacho count offset to account for unexpected jumps in LPF2 tacho data
  * @abs_pos: The absolute position received from an LPF2 motor
  * @tx_msg: Buffer to hold messages transmitted to the device
  * @rx_msg: Buffer to hold messages received from the device
  * @rx_msg_size: Size of the current message being received
  * @ext_mode: Extra mode adder for Powered Up devices (for modes > LUMP_MAX_MODE)
  * @write_cmd_size: The size parameter received from a WRITE command
- * @tacho_rate: The tacho rate received from an LPF2 motor
- * @max_tacho_rate: The "100%" rate received from an LPF2 motor
  * @last_err: data->msg to be printed in case of an error.
  * @err_count: Total number of errors that have occurred
  * @num_data_err: Number of bad reads when receiving DATA data->msgs.
@@ -166,8 +160,6 @@ typedef enum {
  * @mode_change_tx_done: Flag to keep ev3_uart_set_mode_end() blocked until
  * mode has actually changed
  * @speed_payload: Buffer for holding baud rate change message data
- * @mode_combo_payload: Buffer for holding mode combo message data
- * @mode_combo_size: Actual size of mode combo message
  */
 typedef struct {
     pbio_iodev_t iodev;
@@ -177,22 +169,18 @@ typedef struct {
     struct etimer timer;
     pbdrv_uart_dev_t *uart;
     pbio_iodev_info_t *info;
+    pbdrv_motor_driver_dev_t *motor_driver;
     pbio_uartdev_status_t status;
     pbio_iodev_type_id_t type_id;
     uint8_t requested_mode;
     uint8_t new_mode;
     uint32_t new_baud_rate;
     uint32_t info_flags;
-    int32_t tacho_count;
-    int32_t tacho_offset;
-    int16_t abs_pos;
     uint8_t *tx_msg;
     uint8_t *rx_msg;
     uint8_t rx_msg_size;
     uint8_t ext_mode;
     uint8_t write_cmd_size;
-    int8_t tacho_rate;
-    int32_t max_tacho_rate;
     DBG_ERR(const char *last_err);
     uint32_t err_count;
     uint32_t num_data_err;
@@ -200,8 +188,6 @@ typedef struct {
     bool tx_busy;
     bool mode_change_tx_done;
     uint8_t speed_payload[4];
-    uint8_t mode_combo_payload[5];
-    uint8_t mode_combo_size;
 } uartdev_port_data_t;
 
 enum {
@@ -221,8 +207,6 @@ static uint8_t bufs[PBIO_CONFIG_UARTDEV_NUM_DEV][NUM_BUF][EV3_UART_MAX_MESSAGE_S
 
 static uartdev_port_data_t dev_data[PBIO_CONFIG_UARTDEV_NUM_DEV];
 
-static pbdrv_counter_dev_t *counter_devs;
-
 #define PBIO_PT_WAIT_READY(pt, expr) PT_WAIT_UNTIL((pt), (expr) != PBIO_ERROR_AGAIN)
 
 pbio_error_t pbio_uartdev_get(uint8_t id, pbio_iodev_t **iodev) {
@@ -233,11 +217,36 @@ pbio_error_t pbio_uartdev_get(uint8_t id, pbio_iodev_t **iodev) {
     *iodev = &dev_data[id].iodev;
 
     if (!(*iodev)->info) {
-        // device has not been initalized yet
+        // device has not been initialized yet
         return PBIO_ERROR_AGAIN;
     }
 
     return PBIO_SUCCESS;
+}
+
+/**
+ * Indicates to the uartdev driver that the port has been placed in uart mode
+ * (i.e. pin mux) and is ready to start syncing with the attached I/O device.
+ * @param [in] id The uartdev device id.
+ */
+void pbio_uartdev_ready(uint8_t id) {
+    if (id >= PBIO_CONFIG_UARTDEV_NUM_DEV) {
+        return;
+    }
+
+    uartdev_port_data_t *data = &dev_data[id];
+
+    // REVISIT: For now we are assuming that this function is never called
+    // at the wrong time. If this assumption turns out to be false, we will
+    // need to return PBIO_ERROR_AGAIN and modify callers to retry.
+    if (data->status != PBIO_UARTDEV_STATUS_WAITING) {
+        return;
+    }
+
+    // notify pbio_uartdev_update() that there should be a device ready to
+    // communicate with now
+    data->status = PBIO_UARTDEV_STATUS_SYNCING;
+    process_poll(&pbio_uartdev_process);
 }
 
 static inline bool test_and_set_bit(uint8_t bit, uint32_t *flags) {
@@ -437,7 +446,7 @@ static void pbio_uartdev_parse_msg(uartdev_port_data_t *data) {
 
                     // Although capabilities are sent per mode, we apply them to the whole device
                     if (flags & LUMP_MODE_FLAGS0_MOTOR_POWER) {
-                        data->info->capability_flags |= PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR;
+                        data->info->capability_flags |= PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT;
                     }
                     if (flags & LUMP_MODE_FLAGS0_MOTOR_SPEED) {
                         data->info->capability_flags |= PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_SPEED;
@@ -497,9 +506,7 @@ static void pbio_uartdev_parse_msg(uartdev_port_data_t *data) {
                     }
 
                     // REVISIT: this is potentially an array of combos
-                    data->info->mode_combos = data->rx_msg[3] << 8 | data->rx_msg[2];
-
-                    debug_pr("mode combos: %04x\n", data->info->mode_combos);
+                    debug_pr("mode combos: %04x\n", data->rx_msg[3] << 8 | data->rx_msg[2]);
 
                     break;
                 case LUMP_INFO_UNK9:
@@ -512,12 +519,10 @@ static void pbio_uartdev_parse_msg(uartdev_port_data_t *data) {
                         goto err;
                     }
 
-                    // first 3 parameters look like PID constants
-                    data->max_tacho_rate = pbio_get_uint32_le(data->rx_msg + 14);
-
+                    // first 3 parameters look like PID constants, 4th is max tacho_rate
                     debug_pr("motor parameters: %" PRIu32 " %" PRIu32 " %" PRIu32 " %" PRIu32 "\n",
                         pbio_get_uint32_le(data->rx_msg + 2), pbio_get_uint32_le(data->rx_msg + 6),
-                        pbio_get_uint32_le(data->rx_msg + 10), data->max_tacho_rate);
+                        pbio_get_uint32_le(data->rx_msg + 10), pbio_get_uint32_le(data->rx_msg + 14));
 
                     break;
                 case LUMP_INFO_UNK11:
@@ -570,36 +575,15 @@ static void pbio_uartdev_parse_msg(uartdev_port_data_t *data) {
                 goto err;
             }
 
-            if (PBIO_IODEV_IS_FEEDBACK_MOTOR(&data->iodev) && data->write_cmd_size > 0) {
-                data->tacho_rate = data->rx_msg[1];
-
-                // Decode the tacho count data message
-                int32_t tacho_count_msg = pbio_get_uint32_le(data->rx_msg + 2);
-
-                // Sometimes, the incremental tacho data unexpectedly jumps by multiples
-                // of -/+360, so add a correction if an impossibly high change is detected.
-                while (tacho_count_msg - data->tacho_offset - data->tacho_count < -270) {
-                    data->tacho_offset -= 360;
-                }
-                while (tacho_count_msg - data->tacho_offset - data->tacho_count > 270) {
-                    data->tacho_offset += 360;
-                }
-                // The counter driver must return the corrected count
-                data->tacho_count = tacho_count_msg - data->tacho_offset;
-
-                if (data->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_ABS_POS) {
-                    data->abs_pos = data->rx_msg[7] << 8 | data->rx_msg[6];
-                }
-            } else {
-                if (mode >= data->info->num_modes) {
-                    DBG_ERR(data->last_err = "Invalid mode received");
-                    goto err;
-                }
-                data->iodev.mode = mode;
-                if (mode == data->new_mode) {
-                    memcpy(data->iodev.bin_data, data->rx_msg + 1, msg_size - 2);
-                }
+            if (mode >= data->info->num_modes) {
+                DBG_ERR(data->last_err = "Invalid mode received");
+                goto err;
             }
+            data->iodev.mode = mode;
+            if (mode == data->new_mode) {
+                memcpy(data->iodev.bin_data, data->rx_msg + 1, msg_size - 2);
+            }
+
 
             // setting type_id in info struct lets external modules know a device is connected and receiving good data
             data->info->type_id = data->type_id;
@@ -730,16 +714,26 @@ static PT_THREAD(pbio_uartdev_update(uartdev_port_data_t * data)) {
 
     PT_BEGIN(&data->pt);
 
-    // TODO: wait for ioport to be ready for a uartdevice
+    // FIXME: The pin1/pin2 power control should be implemented via a callback
+    // to the port that the I/O device is attached to instead of poking the
+    // motor driver directly. The current implementation is only valid on
+    // Powered Up platforms and it assumes that motor driver id corresponds to
+    // the port.
+
+    #ifdef PBDRV_CONFIG_FIRST_MOTOR_PORT
+    if (pbdrv_motor_driver_get_dev(data->iodev.port - PBDRV_CONFIG_FIRST_MOTOR_PORT, &data->motor_driver) != PBIO_SUCCESS) {
+        data->motor_driver = NULL;
+    }
+    #endif
 
     // reset state for new device
     data->info->type_id = PBIO_IODEV_TYPE_ID_NONE;
     data->info->capability_flags = PBIO_IODEV_CAPABILITY_FLAG_NONE;
     data->ext_mode = 0;
-    data->status = PBIO_UARTDEV_STATUS_SYNCING;
-    // default max tacho rate for BOOST external motor since it is the only
-    // motor that does not send this info
-    data->max_tacho_rate = 1400;
+    data->status = PBIO_UARTDEV_STATUS_WAITING;
+
+    // block until pbio_uartdev_ready() is called
+    PT_WAIT_UNTIL(&data->pt, data->status == PBIO_UARTDEV_STATUS_SYNCING);
 
     pbdrv_uart_flush(data->uart);
 
@@ -894,44 +888,15 @@ static PT_THREAD(pbio_uartdev_update(uartdev_port_data_t * data)) {
     // reset data rx thread
     PT_INIT(&data->data_pt);
 
-    if (PBIO_IODEV_IS_FEEDBACK_MOTOR(&data->iodev)) {
-        data->mode_combo_size = __builtin_popcount(data->info->mode_combos) + 2;
-        data->mode_combo_payload[0] = 0x20 | (data->mode_combo_size - 2); // mode combo command, x modes
-        data->mode_combo_payload[1] = 0; // combo index
-        data->mode_combo_payload[2] = 1 << 4 | 0; // mode 1, dataset 0
-        data->mode_combo_payload[3] = 2 << 4 | 0; // mode 2, dataset 0
-        data->mode_combo_payload[4] = 3 << 4 | 0; // mode 3, dataset 0
-        // HACK: we are cheating here and assuming that all mode combinations
-        // are consecutive, starting with mode 1 and data->mode_combo_size
-        // chops off any unused mode (i.e. APOS)
-
-        // setup motor to send position and speed data
-        PBIO_PT_WAIT_READY(&data->pt,
-            err = ev3_uart_begin_tx_msg(data, LUMP_MSG_TYPE_CMD, LUMP_CMD_WRITE,
-                data->mode_combo_payload, data->mode_combo_size));
-        if (err != PBIO_SUCCESS) {
-            DBG_ERR(data->last_err = "UART Tx begin error during motor");
-            goto err;
-        }
-        PBIO_PT_WAIT_READY(&data->pt, err = pbdrv_uart_write_end(data->uart));
-        if (err != PBIO_SUCCESS) {
-            data->tx_busy = false;
-            DBG_ERR(data->last_err = "UART Tx end error during motor");
-            goto err;
-        }
-        data->tx_busy = false;
-
-        // Reset tacho offset
-        data->tacho_offset = 0;
-    }
-
     // Turn on power for devices that need it
-    if ((&data->iodev)->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_NEEDS_SUPPLY_PIN1) {
-        pbdrv_motor_set_duty_cycle(data->iodev.port, -10000);
-    } else if ((&data->iodev)->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_NEEDS_SUPPLY_PIN2) {
-        pbdrv_motor_set_duty_cycle(data->iodev.port, 10000);
-    } else {
-        pbdrv_motor_coast(data->iodev.port);
+    if (data->motor_driver) {
+        if (data->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_NEEDS_SUPPLY_PIN1) {
+            pbdrv_motor_driver_set_duty_cycle(data->motor_driver, -PBDRV_MOTOR_DRIVER_MAX_DUTY);
+        } else if (data->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_NEEDS_SUPPLY_PIN2) {
+            pbdrv_motor_driver_set_duty_cycle(data->motor_driver, PBDRV_MOTOR_DRIVER_MAX_DUTY);
+        } else {
+            pbdrv_motor_driver_coast(data->motor_driver);
+        }
     }
 
     while (data->status == PBIO_UARTDEV_STATUS_DATA) {
@@ -977,7 +942,9 @@ err:
     data->err_count++;
 
     // Turn off battery supply to this port
-    pbdrv_motor_coast(data->iodev.port);
+    if (data->motor_driver) {
+        pbdrv_motor_driver_coast(data->motor_driver);
+    }
 
     process_post(PROCESS_BROADCAST, PROCESS_EVENT_SERVICE_REMOVED, &data->iodev);
 
@@ -1042,10 +1009,6 @@ static pbio_error_t ev3_uart_set_mode_begin(pbio_iodev_t *iodev, uint8_t mode) {
     uartdev_port_data_t *port_data = PBIO_CONTAINER_OF(iodev, uartdev_port_data_t, iodev);
     pbio_error_t err;
 
-    // User mode change for motors is not supported
-    if (PBIO_IODEV_IS_FEEDBACK_MOTOR(iodev)) {
-        return PBIO_ERROR_NOT_SUPPORTED;
-    }
 
     err = ev3_uart_begin_tx_msg(port_data, LUMP_MSG_TYPE_CMD, LUMP_CMD_SELECT, &mode, 1);
     if (err != PBIO_SUCCESS) {
@@ -1137,59 +1100,6 @@ static const pbio_iodev_ops_t pbio_uartdev_ops = {
     .write_cancel = ev3_uart_write_cancel,
 };
 
-static pbio_error_t pbio_uartdev_get_count(pbdrv_counter_dev_t *dev, int32_t *count) {
-    uartdev_port_data_t *port_data = dev->priv;
-
-    if (!PBIO_IODEV_IS_FEEDBACK_MOTOR(&port_data->iodev)) {
-        return PBIO_ERROR_NO_DEV;
-    }
-
-    *count = port_data->tacho_count;
-
-    return PBIO_SUCCESS;
-}
-
-static pbio_error_t pbio_uartdev_get_abs_count(pbdrv_counter_dev_t *dev, int32_t *count) {
-    uartdev_port_data_t *port_data = dev->priv;
-
-    if (!PBIO_IODEV_IS_FEEDBACK_MOTOR(&port_data->iodev)) {
-        return PBIO_ERROR_NO_DEV;
-    }
-
-    if (!(port_data->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_ABS_POS)) {
-        return PBIO_ERROR_NOT_SUPPORTED;
-    }
-
-    *count = port_data->abs_pos;
-
-    return PBIO_SUCCESS;
-}
-
-static pbio_error_t pbio_uartdev_get_rate(pbdrv_counter_dev_t *dev, int32_t *rate) {
-    uartdev_port_data_t *port_data = dev->priv;
-
-    if (!PBIO_IODEV_IS_FEEDBACK_MOTOR(&port_data->iodev)) {
-        return PBIO_ERROR_NO_DEV;
-    }
-
-    // tacho_rate is in percent, so we need to convert it to counts per second
-    *rate = port_data->max_tacho_rate * port_data->tacho_rate / 100;
-
-    return PBIO_SUCCESS;
-}
-
-static const pbdrv_counter_funcs_t pbio_uartdev_counter_funcs = {
-    .get_count = pbio_uartdev_get_count,
-    .get_abs_count = pbio_uartdev_get_abs_count,
-    .get_rate = pbio_uartdev_get_rate,
-};
-
-void pbio_uartdev_counter_init(pbdrv_counter_dev_t *devs) {
-    // Since this has async init via contiki process, we need to save this
-    // pointer for later.
-    counter_devs = devs;
-}
-
 static PT_THREAD(pbio_uartdev_init(struct pt *pt, uint8_t id)) {
     const pbio_uartdev_platform_data_t *pdata = &pbio_uartdev_platform_data[id];
     uartdev_port_data_t *port_data = &dev_data[id];
@@ -1199,15 +1109,11 @@ static PT_THREAD(pbio_uartdev_init(struct pt *pt, uint8_t id)) {
     PT_WAIT_UNTIL(pt, pbdrv_uart_get(pdata->uart_id, &port_data->uart) == PBIO_SUCCESS);
     port_data->iodev.info = &infos[id].info;
     port_data->iodev.ops = &pbio_uartdev_ops;
+    // FIXME: uartdev should not have to care about port numbers
+    port_data->iodev.port = PBIO_CONFIG_UARTDEV_FIRST_PORT + id;
     port_data->info = &infos[id].info;
     port_data->tx_msg = &bufs[id][BUF_TX_MSG][0];
     port_data->rx_msg = &bufs[id][BUF_RX_MSG][0];
-
-    // It is not guaranteed that pbio_uartdev_counter_init() is called before pbio_uartdev_init()
-    PT_WAIT_UNTIL(pt, counter_devs != NULL);
-    pbdrv_counter_dev_t *counter = &counter_devs[pdata->counter_id];
-    counter->funcs = &pbio_uartdev_counter_funcs;
-    counter->priv = port_data;
 
     PT_END(pt);
 }

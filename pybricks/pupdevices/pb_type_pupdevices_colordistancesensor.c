@@ -35,7 +35,7 @@ STATIC void raw_to_rgb(int32_t *raw, pbio_color_rgb_t *rgb) {
 pb_device_t *pupdevices_ColorDistanceSensor__get_device(mp_obj_t obj) {
 
     // Assert that this is a ColorDistanceSensor
-    pb_assert_type(obj, &pb_type_pupdevices_ColorDistanceSensor);
+    pb_assert_type(obj, &pb_type_pupdevices_ColorDistanceSensor.type);
 
     // Get and return device pointer
     pupdevices_ColorDistanceSensor_obj_t *self = MP_OBJ_TO_PTR(obj);
@@ -50,7 +50,7 @@ STATIC void pupdevices_ColorDistanceSensor__hsv(pupdevices_ColorDistanceSensor_o
     pbio_color_rgb_t rgb;
     raw_to_rgb(raw, &rgb);
 
-    color_map_rgb_to_hsv(&rgb, hsv);
+    pb_color_map_rgb_to_hsv(&rgb, hsv);
 }
 
 STATIC void pupdevices_ColorDistanceSensor_light_on(void *context, const pbio_color_hsv_t *hsv) {
@@ -157,16 +157,24 @@ STATIC const mp_rom_map_elem_t pupdevices_ColorDistanceSensor_locals_dict_table[
     { MP_ROM_QSTR(MP_QSTR_distance),    MP_ROM_PTR(&pupdevices_ColorDistanceSensor_distance_obj)             },
     { MP_ROM_QSTR(MP_QSTR_hsv),         MP_ROM_PTR(&pupdevices_ColorDistanceSensor_hsv_obj)                  },
     { MP_ROM_QSTR(MP_QSTR_detectable_colors),   MP_ROM_PTR(&pb_ColorSensor_detectable_colors_obj)                            },
-    { MP_ROM_QSTR(MP_QSTR_light),       MP_ROM_ATTRIBUTE_OFFSET(pupdevices_ColorDistanceSensor_obj_t, light) },
 };
 STATIC MP_DEFINE_CONST_DICT(pupdevices_ColorDistanceSensor_locals_dict, pupdevices_ColorDistanceSensor_locals_dict_table);
 
+STATIC const pb_attr_dict_entry_t pupdevices_ColorDistanceSensor_attr_dict[] = {
+    PB_DEFINE_CONST_ATTR_RO(MP_QSTR_light, pupdevices_ColorDistanceSensor_obj_t, light),
+};
+
 // type(pybricks.pupdevices.ColorDistanceSensor)
-const mp_obj_type_t pb_type_pupdevices_ColorDistanceSensor = {
-    { &mp_type_type },
-    .name = MP_QSTR_ColorDistanceSensor,
-    .make_new = pupdevices_ColorDistanceSensor_make_new,
-    .locals_dict = (mp_obj_dict_t *)&pupdevices_ColorDistanceSensor_locals_dict,
+const pb_obj_with_attr_type_t pb_type_pupdevices_ColorDistanceSensor = {
+    .type = {
+        .base = { .type = &mp_type_type },
+        .name = MP_QSTR_ColorDistanceSensor,
+        .make_new = pupdevices_ColorDistanceSensor_make_new,
+        .attr = pb_attribute_handler,
+        .locals_dict = (mp_obj_dict_t *)&pupdevices_ColorDistanceSensor_locals_dict,
+    },
+    .attr_dict = pupdevices_ColorDistanceSensor_attr_dict,
+    .attr_dict_size = MP_ARRAY_SIZE(pupdevices_ColorDistanceSensor_attr_dict),
 };
 
 #endif // PYBRICKS_PY_PUPDEVICES

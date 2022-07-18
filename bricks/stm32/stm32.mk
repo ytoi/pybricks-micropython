@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2013, 2014 Damien P. George
-# Copyright (c) 2019-2021 The Pybricks Authors
+# Copyright (c) 2019-2022 The Pybricks Authors
 
 # This file is shared by all STM32-based Pybricks ports
 # Other ports should not use this file
@@ -35,6 +35,15 @@ ifeq ("$(wildcard ../../lib/btstack/README.md)","")
 $(info GIT cloning btstack submodule)
 $(info $(shell cd ../.. && git submodule update --checkout --init lib/btstack))
 ifeq ("$(wildcard ../../lib/btstack/README.md)","")
+$(error failed)
+endif
+endif
+endif
+ifeq ($(PB_LIB_LITTLEFS),1)
+ifeq ("$(wildcard ../../lib/littlefs/README.md)","")
+$(info GIT cloning littlefs submodule)
+$(info $(shell cd ../.. && git submodule update --checkout --init lib/littlefs))
+ifeq ("$(wildcard ../../lib/littlefs/README.md)","")
 $(error failed)
 endif
 endif
@@ -94,6 +103,9 @@ ifeq ($(PB_LIB_BTSTACK),1)
 INC += -I$(PBTOP)/lib/btstack/chipset/cc256x
 INC += -I$(PBTOP)/lib/btstack/src
 endif
+ifeq ($(PB_LIB_LITTLEFS),1)
+INC += -I$(PBTOP)/lib/littlefs
+endif
 ifeq ($(PB_USE_LSM6DS3TR_C),1)
 INC += -I$(PBTOP)/lib/lsm6ds3tr_c_STdC/driver
 endif
@@ -109,8 +121,6 @@ ZIP = zip
 DFU = $(TOP)/tools/dfu.py
 PYDFU = $(TOP)/tools/pydfu.py
 PYBRICKSDEV = pybricksdev
-CHECKSUM = $(PBTOP)/tools/checksum.py
-CHECKSUM_TYPE ?= xor
 METADATA = $(PBTOP)/tools/metadata.py
 OPENOCD ?= openocd
 OPENOCD_CONFIG ?= openocd_stm32$(PB_MCU_SERIES_LCASE).cfg
@@ -119,7 +129,11 @@ TEXT0_ADDR ?= 0x08000000
 CFLAGS_MCU_F0 = -mthumb -mtune=cortex-m0 -mcpu=cortex-m0  -msoft-float
 CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 CFLAGS_MCU_L4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-CFLAGS = $(INC) -Wall -Werror -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB_MCU_SERIES)) $(COPT) $(CFLAGS_EXTRA)
+CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-maybe-uninitialized
+CFLAGS = $(INC) -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB_MCU_SERIES)) $(CFLAGS_WARN) $(COPT) $(CFLAGS_EXTRA)
+$(BUILD)/lib/libm/%.o: CFLAGS += -Wno-sign-compare
+$(BUILD)/lib/stm32lib/%.o: CFLAGS += -Wno-sign-compare
+$(BUILD)/lib/STM32_USB_Device_Library/%.o: CFLAGS += -Wno-sign-compare
 
 # define external oscillator frequency
 CFLAGS += -DHSE_VALUE=$(PB_MCU_EXT_OSC_HZ)
@@ -127,16 +141,16 @@ CFLAGS += -DHSE_VALUE=$(PB_MCU_EXT_OSC_HZ)
 # linker scripts
 LD_FILES = $(PBIO_PLATFORM).ld $(PBTOP)/bricks/stm32/common.ld
 
-LDFLAGS = -nostdlib $(addprefix -T,$(LD_FILES)) -Map=$@.map --cref --gc-sections
+LDFLAGS = $(addprefix -T,$(LD_FILES)) -Wl,-Map=$@.map -Wl,--cref -Wl,--gc-sections
 
 # avoid doubles
 CFLAGS += -fsingle-precision-constant -Wdouble-promotion
 
 # Tune for Debugging or Optimization
 ifeq ($(DEBUG), 1)
-CFLAGS += -O0 -ggdb
+CFLAGS += -Og -ggdb
 else
-CFLAGS += -Os -DNDEBUG
+CFLAGS += -Os -DNDEBUG -flto
 CFLAGS += -fdata-sections -ffunction-sections
 endif
 
@@ -147,9 +161,6 @@ CFLAGS += -DSTM32_H='<stm32$(PB_MCU_SERIES_LCASE)xx.h>'
 CFLAGS += -DSTM32_HAL_H='<stm32$(PB_MCU_SERIES_LCASE)xx_hal.h>'
 
 MPY_CROSS = ../../micropython/mpy-cross/mpy-cross
-# TODO: probably only need no-unicode on movehub
-MPY_CROSS_FLAGS += -mno-unicode
-
 
 LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
@@ -243,6 +254,7 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	pybricks.c \
 	robotics/pb_module_robotics.c \
 	robotics/pb_type_drivebase.c \
+	robotics/pb_type_spikebase.c \
 	tools/pb_module_tools.c \
 	tools/pb_type_stopwatch.c \
 	util_mp/pb_obj_helper.c \
@@ -251,6 +263,7 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	util_pb/pb_conversions.c \
 	util_pb/pb_device_stm32.c \
 	util_pb/pb_error.c \
+	util_pb/pb_flash.c \
 	util_pb/pb_imu.c \
 	util_pb/pb_task.c \
 	)
@@ -318,6 +331,13 @@ BTSTACK_SRC_C += $(addprefix lib/btstack/src/ble/,\
 
 BTSTACK_SRC_C += $(addprefix lib/btstack/chipset/cc256x/,\
 	btstack_chipset_cc256x.c \
+	)
+
+# Littlefs
+
+LITTLEFS_SRC_C = $(addprefix lib/littlefs/,\
+	lfs_util.c \
+	lfs.c \
 	)
 
 # Contiki
@@ -397,7 +417,6 @@ LIBFIXMATH_SRC_C = $(addprefix lib/libfixmath/libfixmath/,\
 # Pybricks I/O library
 
 PBIO_SRC_C = $(addprefix lib/pbio/,\
-	drv/$(PBIO_PLATFORM)/motor.c \
 	drv/adc/adc_stm32_hal.c \
 	drv/adc/adc_stm32f0.c \
 	drv/battery/battery_adc.c \
@@ -415,6 +434,7 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/clock/clock_stm32.c \
 	drv/core.c \
 	drv/counter/counter_core.c \
+	drv/counter/counter_lpf2.c \
 	drv/counter/counter_stm32f0_gpio_quad_enc.c \
 	drv/gpio/gpio_stm32f0.c \
 	drv/gpio/gpio_stm32f4.c \
@@ -425,6 +445,7 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/led/led_core.c \
 	drv/led/led_dual.c \
 	drv/led/led_pwm.c \
+	drv/motor_driver/motor_driver_hbridge_pwm.c \
 	drv/pwm/pwm_core.c \
 	drv/pwm/pwm_lp50xx_stm32.c \
 	drv/pwm/pwm_stm32_tim.c \
@@ -435,14 +456,15 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/uart/uart_stm32f0.c \
 	drv/uart/uart_stm32f4_ll_irq.c \
 	drv/uart/uart_stm32l4_ll_dma.c \
-	drv/usb/stm32_usb_serial.c \
+	drv/usb/usb_stm32.c \
 	drv/watchdog/watchdog_stm32.c \
-	platform/motors/settings.c \
 	platform/$(PBIO_PLATFORM)/platform.c \
 	platform/$(PBIO_PLATFORM)/sys.c \
+	src/angle.c \
 	src/battery.c \
 	src/color/conversion.c \
 	src/control.c \
+	src/control_settings.c \
 	src/dcmotor.c \
 	src/drivebase.c \
 	src/error.c \
@@ -455,14 +477,15 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	src/main.c \
 	src/math.c \
 	src/motor_process.c \
+	src/motor/servo_settings.c \
 	src/observer.c \
+	src/parent.c \
 	src/protocol/lwp3.c \
 	src/protocol/nus.c \
 	src/protocol/pybricks.c \
 	src/servo.c \
 	src/tacho.c \
 	src/task.c \
-	src/trajectory_ext.c \
 	src/trajectory.c \
 	src/uartdev.c \
 	src/util.c \
@@ -543,6 +566,10 @@ endif
 ifeq ($(PB_LIB_BTSTACK),1)
 OBJ += $(addprefix $(BUILD)/, $(BTSTACK_SRC_C:.c=.o))
 endif
+ifeq ($(PB_LIB_LITTLEFS),1)
+CFLAGS+= -DLFS_NO_ASSERT -DLFS_NO_MALLOC -DLFS_NO_DEBUG -DLFS_NO_WARN -DLFS_NO_ERROR
+OBJ += $(addprefix $(BUILD)/, $(LITTLEFS_SRC_C:.c=.o))
+endif
 ifeq ($(PB_USE_HAL),1)
 OBJ += $(addprefix $(BUILD)/, $(HAL_SRC_C:.c=.o))
 endif
@@ -557,18 +584,6 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_LIBM:.c=.o))
 ifeq ($(PB_LIB_STM32_USB_DEVICE),1)
 OBJ += $(addprefix $(BUILD)/, $(SRC_STM32_USB_DEV:.c=.o))
 endif
-ifeq ($(PB_INCLUDE_MAIN_MPY),1)
-OBJ += $(BUILD)/main.mpy.o
-endif
-
-$(BUILD)/main.mpy: main.py
-	$(ECHO) "MPY $<"
-	$(Q)$(MPY_CROSS) -o $@ $(MPY_CROSS_FLAGS) $<
-	$(ECHO) "`wc -c < $@` bytes"
-
-$(BUILD)/main.mpy.o: $(BUILD)/main.mpy
-	$(Q)$(OBJCOPY) -I binary -O elf32-littlearm -B arm \
-		--rename-section .data=.mpy,alloc,load,readonly,data,contents $^ $@
 
 # List of sources for qstr extraction
 SRC_QSTR += $(SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
@@ -576,7 +591,7 @@ SRC_QSTR += $(SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
 SRC_QSTR_AUTO_DEPS +=
 
 # Main firmware build targets
-TARGETS := $(BUILD)/firmware.zip $(BUILD)/firmware.bin
+TARGETS := $(BUILD)/firmware.zip
 
 all: $(TARGETS)
 
@@ -597,54 +612,33 @@ $(BUILD)/genhdr/%.h: $(PBTOP)/lib/pbio/drv/bluetooth/%.gatt
 
 endif
 
-FW_CHECKSUM := $$($(CHECKSUM) $(CHECKSUM_TYPE) $(BUILD)/firmware-no-checksum.bin $(PB_FIRMWARE_MAX_SIZE))
 FW_VERSION := $(shell $(GIT) describe --tags --dirty --always --exclude "@pybricks/*")
 
-# Sections to include in the binary
-ifeq ($(PB_INCLUDE_MAIN_MPY),1)
-SECTIONS := -j .isr_vector -j .text -j .data -j .name -j .user -j .checksum
-else
-SECTIONS := -j .isr_vector -j .text -j .data -j .name -j .checksum
-endif
-
-$(BUILD)/firmware-no-checksum.elf: $(LD_FILES) $(OBJ)
+$(BUILD)/firmware.elf: $(LD_FILES) $(OBJ)
 	$(ECHO) "LINK $@"
-	$(Q)$(LD) --defsym=CHECKSUM=0 $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
+	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 	$(Q)$(SIZE) -A $@
 
-# firmware blob used to calculate checksum
-$(BUILD)/firmware-no-checksum.bin: $(BUILD)/firmware-no-checksum.elf
-	$(Q)$(OBJCOPY) -O binary $(SECTIONS) $^ $@
-
-$(BUILD)/firmware.elf: $(BUILD)/firmware-no-checksum.bin $(OBJ)
-	$(ECHO) "RELINK $@"
-	$(Q)$(LD) --defsym=CHECKSUM=$(FW_CHECKSUM) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
-
-# firmware blob with main.mpy and checksum appended - can be flashed to hub
-$(BUILD)/firmware.bin: $(BUILD)/firmware.elf
-	$(ECHO) "BIN creating firmware file"
-	$(Q)$(OBJCOPY) -O binary $(SECTIONS) $^ $@
-	$(ECHO) "`wc -c < $@` bytes"
-
 # firmware blob without main.mpy or checksum - use as base for appending other .mpy
-$(BUILD)/firmware-base.bin: $(BUILD)/firmware-no-checksum.elf
+$(BUILD)/firmware-base.bin: $(BUILD)/firmware.elf
 	$(ECHO) "BIN creating firmware base file"
 	$(Q)$(OBJCOPY) -O binary -j .isr_vector -j .text -j .data -j .name $^ $@
 	$(ECHO) "`wc -c < $@` bytes"
 
-$(BUILD)/firmware.metadata.json: $(BUILD)/firmware-no-checksum.elf $(BUILD)/firmware.bin $(METADATA)
+$(BUILD)/firmware.metadata.json: $(BUILD)/firmware.elf $(METADATA)
 	$(ECHO) "META creating firmware metadata"
-	$(Q)$(METADATA) $(FW_VERSION) $(PBIO_PLATFORM) $(MPY_CROSS_FLAGS) $<.map $(word 2,$^) $@
+	$(Q)$(METADATA) $(FW_VERSION) $(PBIO_PLATFORM) $(MPY_CROSS_FLAGS) $<.map $@
 
 # firmware.zip file
 ZIP_FILES := \
+	$(BUILD)/firmware-base.bin \
 	$(BUILD)/firmware.metadata.json \
 	ReadMe_OSS.txt \
 
-ifeq ($(PB_INCLUDE_MAIN_MPY),1)
-ZIP_FILES += main.py $(BUILD)/firmware-base.bin
-else
-ZIP_FILES += $(BUILD)/firmware.bin
+ifeq ($(PB_FW_ZIP_INCLUDE_MAIN_MPY),1)
+ZIP_FILES += main.py
+endif
+ifeq ($(PB_FW_ZIP_INCLUDE_INSTALL_SCRIPT),1)
 ZIP_FILES += $(PBTOP)/bricks/stm32/install_pybricks.py
 endif
 
@@ -653,20 +647,14 @@ $(BUILD)/firmware.zip: $(ZIP_FILES)
 	$(Q)$(ZIP) -j $@ $^
 
 # firmware in DFU format
-$(BUILD)/%.dfu: $(BUILD)/%.bin
+$(BUILD)/%.dfu: $(BUILD)/%-base.bin
 	$(ECHO) "DFU Create $@"
 	$(Q)$(PYTHON) $(DFU) -b $(TEXT0_ADDR):$< $@
 
 deploy: $(BUILD)/firmware.zip
 	$(Q)$(PYBRICKSDEV) flash $< --name $(PBIO_PLATFORM)
 
-deploy-dfu-%: $(BUILD)/%.dfu
-	$(ECHO) "Writing $< to the board"
-	$(Q)$(PYTHON) $(PYDFU) -u $< $(if $(DFU_VID),--vid $(DFU_VID)) $(if $(DFU_PID),--pid $(DFU_PID))
-
-deploy-dfu: deploy-dfu-firmware
-
-deploy-openocd: $(BUILD)/firmware-no-checksum.bin
+deploy-openocd: $(BUILD)/firmware-base.bin
 	$(ECHO) "Writing $< to the board via ST-LINK using OpenOCD"
 	$(Q)$(OPENOCD) -f $(OPENOCD_CONFIG) -c "stm_flash $< $(TEXT0_ADDR)"
 

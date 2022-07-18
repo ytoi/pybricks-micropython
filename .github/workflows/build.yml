@@ -6,7 +6,7 @@ on:
     - '**'
     tags-ignore:
     - '@pybricks/**'
-  pull_request_target:
+  pull_request:
 
 env:
   MAKEOPTS: -j2
@@ -103,8 +103,8 @@ jobs:
         name: pybricks-micropython
         path: bricks/ev3dev/pybricks-micropython
 
-  ev3dev_bionic:
-    name: ev3dev-bionic
+  ev3dev_ubuntu_lts:
+    name: ev3dev-ubuntu-lts
     needs: mpy_cross
     runs-on: ubuntu-20.04
     env:
@@ -197,18 +197,21 @@ jobs:
     - name: Install python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.8'
+        python-version: '3.10'
     - name: Install Python packages
       run:  python -m pip install azure-cosmosdb-table GitPython
-    - name: Build firmware
-      if: ${{ github.ref != 'refs/heads/master' }}
+    - name: Build firmware (pull request)
+      if: ${{ github.base_ref != null }}
+      run: .github/build-each-commit.py ${{ matrix.hub }} ${{ github.sha }}
+    - name: Build firmware (non-master branch)
+      if: ${{ github.base_ref == null && github.ref != 'refs/heads/master' }}
       env:
         STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
         STORAGE_KEY: ${{ secrets.STORAGE_KEY }}
         FIRMWARE_SIZE_TABLE: ${{ secrets.FIRMWARE_SIZE_TABLE }}
-      run: .github/build-each-commit.py ${{ matrix.hub }} origin/master ${{ github.ref }}
-    - name: Build firmware
-      if: ${{ github.ref == 'refs/heads/master' }}
+      run: .github/build-each-commit.py ${{ matrix.hub }} ${{ github.ref_name }}
+    - name: Build firmware (master branch)
+      if: ${{ github.base_ref == null && github.ref == 'refs/heads/master' }}
       run: make -C bricks/${{ matrix.hub }}
     - name: Extract firmware.zip for upload
       if: ${{ success() && matrix.hub != 'nxt' }}
@@ -220,6 +223,28 @@ jobs:
       with:
         name: ${{ matrix.hub }}-firmware
         path: bricks/${{ matrix.hub }}/build/upload/*
+
+  virtualhub:
+    name: virtual hub
+    needs: [mpy_cross]
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+        fetch-depth: 0
+    - name: Download mpy-cross
+      uses: actions/download-artifact@v1
+      with:
+        name: mpy-cross
+        path: micropython/mpy-cross
+    - name: Fix file permission
+      run: chmod +x micropython/mpy-cross/mpy-cross
+    - name: Build
+      run: |
+        make $MAKEOPTS -C bricks/virtualhub submodules
+        make $MAKEOPTS -C bricks/virtualhub
 
   debug:
     name: debug firmware

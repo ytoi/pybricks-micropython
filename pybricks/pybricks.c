@@ -92,6 +92,13 @@ const mp_obj_module_t pb_package_pybricks = {
     .globals = (mp_obj_dict_t *)&pb_package_pybricks_globals,
 };
 
+#if PYBRICKS_HUB_EV3BRICK
+// ev3dev extends the C module in Python
+MP_REGISTER_MODULE(MP_QSTR_pybricks_c, pb_package_pybricks);
+#else
+MP_REGISTER_MODULE(MP_QSTR_pybricks, pb_package_pybricks);
+#endif
+
 /**
  * Import all pybricks.* modules.
  *
@@ -112,6 +119,6 @@ void pb_package_import_all(void) {
     #if PYBRICKS_PY_HUBS
     // Initialize hub instance
     const mp_obj_t args;
-    mp_store_name(MP_QSTR_hub, pb_type_ThisHub.make_new(&pb_type_ThisHub, 0, 0, &args));
+    mp_store_name(MP_QSTR_hub, pb_type_ThisHub.type.make_new(&pb_type_ThisHub.type, 0, 0, &args));
     #endif
 }

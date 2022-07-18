@@ -22,12 +22,15 @@
 #include <lego_uart.h>
 
 #include <pbdrv/gpio.h>
-#include <pbdrv/motor.h>
 #include <pbio/error.h>
 #include <pbio/iodev.h>
+#include <pbio/port.h>
 #include <pbio/uartdev.h>
 
 #include "ioport_lpf2.h"
+
+/** The number of consecutive repeated detections needed for an affirmative ID. */
+#define AFFIRMATIVE_MATCH_COUNT 20
 
 typedef enum {
     DEV_ID_GROUP_GND,
@@ -64,7 +67,7 @@ static const basic_info_t basic_infos[] = {
     [PBIO_IODEV_TYPE_ID_LPF2_MMOTOR] = {
         .info = {
             .type_id = PBIO_IODEV_TYPE_ID_LPF2_MMOTOR,
-            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR,
+            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT,
             .num_modes = 1,
         },
         .mode = {
@@ -75,7 +78,7 @@ static const basic_info_t basic_infos[] = {
     [PBIO_IODEV_TYPE_ID_LPF2_TRAIN] = {
         .info = {
             .type_id = PBIO_IODEV_TYPE_ID_LPF2_TRAIN,
-            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR,
+            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT,
             .num_modes = 1,
         },
         .mode = {
@@ -86,7 +89,7 @@ static const basic_info_t basic_infos[] = {
     [PBIO_IODEV_TYPE_ID_LPF2_LIGHT] = {
         .info = {
             .type_id = PBIO_IODEV_TYPE_ID_LPF2_LIGHT,
-            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_NONE,
+            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT,
             .num_modes = 1,
         },
         .mode = {
@@ -97,7 +100,7 @@ static const basic_info_t basic_infos[] = {
     [PBIO_IODEV_TYPE_ID_LPF2_LIGHT1] = {
         .info = {
             .type_id = PBIO_IODEV_TYPE_ID_LPF2_LIGHT1,
-            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_NONE,
+            .capability_flags = PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT,
             .num_modes = 1,
         },
         .mode = {
@@ -191,10 +194,17 @@ static void init_one(uint8_t ioport) {
 // TODO: This should be moved to a common ioport_core.c file or removed entirely
 pbio_error_t pbdrv_ioport_get_iodev(pbio_port_id_t port, pbio_iodev_t **iodev) {
     if (port < PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT || port > PBDRV_CONFIG_IOPORT_LPF2_LAST_PORT) {
-        return PBIO_ERROR_INVALID_PORT;
+        return PBIO_ERROR_INVALID_ARG;
     }
 
-    *iodev = ioport_devs[port - PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT].iodev;
+    ioport_dev_t *ioport = &ioport_devs[port - PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT];
+
+    if (ioport->dcm.dev_id_match_count < AFFIRMATIVE_MATCH_COUNT) {
+        // the device connection manager hasn't figured out what is or isn't connected yet
+        return PBIO_ERROR_AGAIN;
+    }
+
+    *iodev = ioport->iodev;
     if (*iodev == NULL) {
         return PBIO_ERROR_NO_DEV;
     }
@@ -207,13 +217,37 @@ pbio_error_t pbdrv_ioport_get_iodev(pbio_port_id_t port, pbio_iodev_t **iodev) {
     return PBIO_SUCCESS;
 }
 
-// Turns off power to passive (non-uart) devices
-void pbdrv_ioport_reset_passive_devices(void) {
-    for (int i = 0; i < PBDRV_CONFIG_IOPORT_LPF2_NUM_PORTS; i++) {
-        if (ioport_devs[i].connected_type_id != PBIO_IODEV_TYPE_ID_LPF2_UNKNOWN_UART) {
-            pbdrv_motor_coast(i + PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT);
-        }
+pbio_error_t pbdrv_ioport_get_motor_device_type_id(pbio_port_id_t port, pbio_iodev_type_id_t *type_id) {
+    #if PBDRV_CONFIG_IOPORT_LPF2_MOVE_HUB_HACK
+    if (port == PBIO_PORT_ID_A || port == PBIO_PORT_ID_B) {
+        *type_id = PBIO_IODEV_TYPE_ID_MOVE_HUB_MOTOR;
+        return PBIO_SUCCESS;
     }
+    #endif
+
+    // Try to get iodev.
+    pbio_iodev_t *iodev;
+    pbio_error_t err = pbdrv_ioport_get_iodev(port, &iodev);
+
+    // PBIO_ERROR_NO_DEV is allowed; it means nothing is attached.
+    if (err == PBIO_ERROR_NO_DEV) {
+        *type_id = PBIO_IODEV_TYPE_ID_NONE;
+        return PBIO_SUCCESS;
+    }
+
+    if (err != PBIO_SUCCESS) {
+        return err;
+    }
+
+    // This operation is invalid for non-motors like powered sensors.
+    if (!PBIO_IODEV_IS_DC_OUTPUT(iodev)) {
+        return PBIO_ERROR_INVALID_OP;
+    }
+
+    // Get the device ID for the motor or light.
+    *type_id = iodev->info->type_id;
+
+    return PBIO_SUCCESS;
 }
 
 // This is the device connection manager (dcm). It monitors the ID1 and ID2 pins
@@ -393,16 +427,18 @@ static PT_THREAD(poll_dcm(ioport_dev_t * ioport)) {
     pbdrv_gpio_out_high(&pdata.uart_tx);
     pbdrv_gpio_out_low(&pdata.uart_buf);
 
+    // We don't consider the detected device "affirmative" until we have
+    // detected the same device multiple times in a row. Similarly,
     if (data->type_id == data->prev_type_id) {
-        if (++data->dev_id_match_count >= 20) {
-
-            if (data->type_id != ioport->connected_type_id) {
-                ioport->connected_type_id = data->type_id;
-            }
-
-            // don't want to wrap around and re-trigger
-            data->dev_id_match_count--;
+        if (data->dev_id_match_count < UINT8_MAX) {
+            data->dev_id_match_count++;
         }
+
+        if (data->dev_id_match_count >= AFFIRMATIVE_MATCH_COUNT) {
+            ioport->connected_type_id = data->type_id;
+        }
+    } else {
+        data->dev_id_match_count = 0;
     }
 
     data->prev_type_id = data->type_id;
@@ -477,8 +513,10 @@ PROCESS_THREAD(pbdrv_ioport_lpf2_process, ev, data) {
                     if (ioport->connected_type_id == PBIO_IODEV_TYPE_ID_LPF2_UNKNOWN_UART) {
                         debug_pr("ioport(%c): UART device detected.\n", i + PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT);
                         ioport_enable_uart(ioport);
+                        _Static_assert(PBDRV_CONFIG_IOPORT_LPF2_NUM_PORTS == PBIO_CONFIG_UARTDEV_NUM_DEV,
+                            "code assumes port ID is same as uartdev ID");
+                        pbio_uartdev_ready(i);
                         pbio_uartdev_get(i, &ioport->iodev);
-                        ioport->iodev->port = i + PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT;
                     } else if (ioport->connected_type_id == PBIO_IODEV_TYPE_ID_NONE) {
                         debug_pr("ioport(%c): Device unplugged.\n", i + PBDRV_CONFIG_IOPORT_LPF2_FIRST_PORT);
                         ioport->iodev = NULL;

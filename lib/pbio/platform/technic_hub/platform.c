@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 #include <stdbool.h>
 
@@ -9,8 +9,10 @@
 #include "../../drv/battery/battery_adc.h"
 #include "../../drv/bluetooth/bluetooth_stm32_cc2640.h"
 #include "../../drv/button/button_gpio.h"
+#include "../../drv/counter/counter_lpf2.h"
 #include "../../drv/ioport/ioport_lpf2.h"
 #include "../../drv/led/led_pwm.h"
+#include "../../drv/motor_driver/motor_driver_hbridge_pwm.h"
 #include "../../drv/pwm/pwm_stm32_tim.h"
 #include "../../drv/uart/uart_stm32l4_ll_dma.h"
 
@@ -182,6 +184,27 @@ const pbdrv_button_gpio_platform_t pbdrv_button_gpio_platform[PBDRV_CONFIG_BUTTO
     },
 };
 
+// counters
+
+const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV] = {
+    [COUNTER_PORT_A] = {
+        .counter_id = COUNTER_PORT_A,
+        .port_id = PBIO_PORT_ID_A,
+    },
+    [COUNTER_PORT_B] = {
+        .counter_id = COUNTER_PORT_B,
+        .port_id = PBIO_PORT_ID_B,
+    },
+    [COUNTER_PORT_C] = {
+        .counter_id = COUNTER_PORT_C,
+        .port_id = PBIO_PORT_ID_C,
+    },
+    [COUNTER_PORT_D] = {
+        .counter_id = COUNTER_PORT_D,
+        .port_id = PBIO_PORT_ID_D,
+    },
+};
+
 // I/O ports
 
 const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
@@ -228,8 +251,18 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
 
 // LED
 
+static const pbdrv_led_pwm_platform_color_t pbdrv_led_pwm_color = {
+    .r_factor = 1000,
+    .g_factor = 270,
+    .b_factor = 200,
+    .r_brightness = 174,
+    .g_brightness = 1590,
+    .b_brightness = 327,
+};
+
 const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED_PWM_NUM_DEV] = {
     {
+        .color = &pbdrv_led_pwm_color,
         .id = LED_DEV_0,
         .r_id = PWM_DEV_3,
         .r_ch = 2,
@@ -239,6 +272,64 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
         .b_ch = 1,
         .scale_factor = 5,
     }
+};
+
+// Motor driver
+
+const pbdrv_motor_driver_hbridge_pwm_platform_data_t
+    pbdrv_motor_driver_hbridge_pwm_platform_data[PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV] = {
+    // Port A
+    {
+        .pin1_gpio.bank = GPIOA,
+        .pin1_gpio.pin = 1,
+        .pin1_alt = GPIO_AF14_TIM15,
+        .pin1_pwm_id = PWM_DEV_1,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 14,
+        .pin2_alt = GPIO_AF14_TIM15,
+        .pin2_pwm_id = PWM_DEV_1,
+        .pin2_pwm_ch = 1,
+    },
+    // Port B
+    {
+        .pin1_gpio.bank = GPIOA,
+        .pin1_gpio.pin = 9,
+        .pin1_alt = GPIO_AF1_TIM1,
+        .pin1_pwm_id = PWM_DEV_0,
+        .pin1_pwm_ch = 2,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 0,
+        .pin2_alt = GPIO_AF1_TIM1,
+        .pin2_pwm_id = PWM_DEV_0,
+        .pin2_pwm_ch = 2,
+    },
+    // Port C
+    {
+        .pin1_gpio.bank = GPIOB,
+        .pin1_gpio.pin = 13,
+        .pin1_alt = GPIO_AF1_TIM1,
+        .pin1_pwm_id = PWM_DEV_0,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOA,
+        .pin2_gpio.pin = 8,
+        .pin2_alt = GPIO_AF1_TIM1,
+        .pin2_pwm_id = PWM_DEV_0,
+        .pin2_pwm_ch = 1,
+    },
+    // Port D
+    {
+        .pin1_gpio.bank = GPIOA,
+        .pin1_gpio.pin = 10,
+        .pin1_alt = GPIO_AF1_TIM1,
+        .pin1_pwm_id = PWM_DEV_0,
+        .pin1_pwm_ch = 3,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 1,
+        .pin2_alt = GPIO_AF1_TIM1,
+        .pin2_pwm_id = PWM_DEV_0,
+        .pin2_pwm_ch = 3,
+    },
 };
 
 // PWM
@@ -479,22 +570,17 @@ void LPUART1_IRQHandler(void) {
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDEV_NUM_DEV] = {
     [0] = {
         .uart_id = UART_PORT_A,
-        .counter_id = COUNTER_PORT_A,
     },
     [1] = {
         .uart_id = UART_PORT_B,
-        .counter_id = COUNTER_PORT_B,
     },
     [2] = {
         .uart_id = UART_PORT_C,
-        .counter_id = COUNTER_PORT_C,
     },
     [3] = {
         .uart_id = UART_PORT_D,
-        .counter_id = COUNTER_PORT_D,
     },
 };
-
 
 // STM32 HAL integration
 
@@ -510,8 +596,22 @@ const uint32_t MSIRangeTable[12] = {
 };
 
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
-    GPIO_InitTypeDef gpio_init = { 0 };
-    ADC_ChannelConfTypeDef adc_ch_config = { 0 };
+    GPIO_InitTypeDef gpio_init = {
+        .Pin = 0, // variable
+        .Mode = GPIO_MODE_ANALOG_ADC_CONTROL,
+        .Pull = GPIO_NOPULL,
+        .Speed = GPIO_SPEED_FREQ_LOW,
+        .Alternate = 0, // not used
+    };
+
+    ADC_ChannelConfTypeDef adc_ch_config = {
+        .Channel = 0, // variable
+        .Rank = 0, // variable
+        .SamplingTime = ADC_SAMPLETIME_640CYCLES_5,
+        .SingleDiff = ADC_SINGLE_ENDED,
+        .OffsetNumber = ADC_OFFSET_NONE,
+        .Offset = 0, // not used
+    };
 
     // clocks are enabled in SystemInit
     assert_param(__HAL_RCC_TIM6_IS_CLK_ENABLED());
@@ -523,32 +623,25 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
     // PC1, battery voltage
 
     gpio_init.Pin = GPIO_PIN_1;
-    gpio_init.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
-    gpio_init.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOC, &gpio_init);
 
     adc_ch_config.Channel = ADC_CHANNEL_2;
     adc_ch_config.Rank = ADC_REGULAR_RANK_1;
-    adc_ch_config.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
     HAL_ADC_ConfigChannel(hadc, &adc_ch_config);
 
     // PC2, battery current
 
     gpio_init.Pin = GPIO_PIN_2;
-    gpio_init.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
-    gpio_init.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOC, &gpio_init);
 
     adc_ch_config.Channel = ADC_CHANNEL_3;
     adc_ch_config.Rank = ADC_REGULAR_RANK_2;
-    adc_ch_config.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
     HAL_ADC_ConfigChannel(hadc, &adc_ch_config);
 
     // internal, temperature
 
     adc_ch_config.Channel = ADC_CHANNEL_TEMPSENSOR;
     adc_ch_config.Rank = ADC_REGULAR_RANK_3;
-    adc_ch_config.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
     HAL_ADC_ConfigChannel(hadc, &adc_ch_config);
 }
 
@@ -557,7 +650,7 @@ void DMA1_Channel1_IRQHandler(void) {
 }
 
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
-    GPIO_InitTypeDef gpio_init = { 0 };
+    GPIO_InitTypeDef gpio_init = { };
 
     gpio_init.Mode = GPIO_MODE_AF_OD;
     gpio_init.Pull = GPIO_NOPULL;
@@ -601,7 +694,7 @@ void SystemInit(void) {
     SCB->VTOR = (uint32_t)&_fw_isr_vector_src;
 
     // Using internal RC oscillator (MSI)
-    RCC_OscInitTypeDef osc_init = { 0 };
+    RCC_OscInitTypeDef osc_init = { };
     osc_init.OscillatorType = RCC_OSCILLATORTYPE_MSI;
     osc_init.MSIState = RCC_MSI_ON;
     osc_init.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
@@ -638,7 +731,7 @@ void SystemInit(void) {
         RCC_APB2ENR_USART1EN | RCC_APB2ENR_TIM15EN | RCC_APB2ENR_TIM16EN;
 
     // Keep main power on (PC12)
-    GPIO_InitTypeDef gpio_init = { 0 };
+    GPIO_InitTypeDef gpio_init = { };
     gpio_init.Pin = GPIO_PIN_12;
     gpio_init.Mode = GPIO_MODE_OUTPUT_PP;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_12, GPIO_PIN_SET);

@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 // Bluetooth for STM32 MCU with TI CC2640
+
+// Useful docs:
+// - https://dev.ti.com/tirex/explore/content/simplelink_cc13x2_26x2_sdk_3_10_00_53/docs/ble5stack/ble_user_guide/html/ble-stack-common/npi-index.html#npi-handshake
+// - http://e2e.ti.com/cfs-file/__key/communityserver-discussions-components-files/538/3583.BLE-SPI-Driver-Design-External.pdf
 
 #include <pbdrv/config.h>
 
@@ -100,6 +104,8 @@ static uint8_t write_xfer_size;
 
 // reflects state of SRDY signal
 volatile bool spi_srdy;
+// count of SRDY signal falling edges
+volatile uint8_t spi_n_srdy_count;
 // set to false when xfer is started and true when xfer is complete
 volatile bool spi_xfer_complete;
 
@@ -440,12 +446,12 @@ try_again:
 
     for (;;) {
         advertising_data_received = false;
-        PT_WAIT_UNTIL(pt, {
+        PT_WAIT_UNTIL(pt, ({
             if (task->cancel) {
                 goto cancel_discovery;
             }
             advertising_data_received;
-        });
+        }));
 
         // TODO: Properly parse advertising data. For now, we are assuming that
         // the service UUID is at a fixed position and we are getting only
@@ -476,12 +482,12 @@ try_again:
 
     for (;;) {
         advertising_data_received = false;
-        PT_WAIT_UNTIL(pt, {
+        PT_WAIT_UNTIL(pt, ({
             if (task->cancel) {
                 goto cancel_discovery;
             }
             advertising_data_received;
-        });
+        }));
 
         // TODO: Properly parse scan response data. For now, we are assuming
         // that the saved Bluetooth address is sufficient to recognize correct device
@@ -515,12 +521,12 @@ try_again:
 
     context->status = read_buf[8]; // debug
 
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         if (task->cancel) {
             goto cancel_connect;
         }
         remote_handle != NO_CONNECTION;
-    });
+    }));
 
     // discover LWP3 characteristic to get attribute handle
 
@@ -546,7 +552,7 @@ try_again:
     // multiple responses received before the procedure is complete.
     // REVISIT: what happens when remote is disconnected while waiting here?
 
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         uint8_t *payload;
         uint16_t event;
         HCI_StatusCodes_t status;
@@ -573,7 +579,7 @@ try_again:
 
             status == bleProcedureComplete;
         });
-    });
+    }));
 
     // enable notifications
 
@@ -675,7 +681,7 @@ retry:
     // could be confused with the next request). The device could also become
     // disconnected, in which case we never receive a response.
 
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         if (remote_handle == NO_CONNECTION) {
             task->status = PBIO_ERROR_NO_DEV;
             PT_EXIT(pt);
@@ -693,7 +699,7 @@ retry:
 
             event == ATT_EVENT_WRITE_RSP;
         });
-    });
+    }));
 
 exit:
     task->status = ble_error_to_pbio_error(status);
@@ -735,6 +741,11 @@ void pbdrv_bluetooth_disconnect_remote(void) {
 
 void pbdrv_bluetooth_stm32_cc2640_srdy_irq(bool srdy) {
     spi_srdy = srdy;
+
+    if (!srdy) {
+        spi_n_srdy_count++;
+    }
+
     process_poll(&pbdrv_bluetooth_spi_process);
 }
 
@@ -1707,22 +1718,16 @@ start:
             &read_buf[NPI_SPI_HEADER_LEN], xfer_size);
         PROCESS_WAIT_UNTIL(spi_xfer_complete);
 
-        // HACK: SRDY can transition from low and back to high in the time
-        // between we set MRDY and when we read SRDY again. So we use a timer
-        // prevent a lockup in case we miss detecting the transitions.
-
-        // See Δt6 + Δt7 in the timing diagram at:
-        // https://dev.ti.com/tirex/explore/content/simplelink_cc13x2_26x2_sdk_3_10_00_53/docs/ble5stack/ble_user_guide/html/ble-stack-common/npi-index.html#npi-handshake
-
-        // This document suggests that this timing varies from 0.181ms to 1.2 ms.
-        // http://e2e.ti.com/cfs-file/__key/communityserver-discussions-components-files/538/3583.BLE-SPI-Driver-Design-External.pdf
-
-        // REVISIT: maybe there is a way to get individual oneshots for the
-        // rising and falling edges of the interrupt instead of the timer hack?
-
-        etimer_set(&timer, 2);
+        // After the transfer is complete, we release the MRDY signal to the
+        // Bluetooth chip and it acknowledges by releasing the SRDY signal.
+        static uint8_t prev_n_srdy_count;
+        prev_n_srdy_count = spi_n_srdy_count;
         spi_set_mrdy(false);
-        PROCESS_WAIT_UNTIL(!spi_srdy || (ev == PROCESS_EVENT_TIMER && etimer_expired(&timer)));
+        // Multiple interrupts can happen between line above and line below,
+        // so we can't use PROCESS_WAIT_UNTIL(!spi_srdy) as the SRDY signal may
+        // go off and back on again before we can read it once. So we have a
+        // separate falling edge trigger to ensure we catch the event.
+        PROCESS_WAIT_UNTIL(spi_n_srdy_count != prev_n_srdy_count);
 
         // set to 0 to indicate that xfer is complete
         write_xfer_size = 0;

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-
+#define MICROPY_BANNER_NAME_AND_VERSION "Pybricks MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE
 #define MICROPY_HW_BOARD_NAME           "LEGO MINDSTORMS NXT Brick"
 #define MICROPY_HW_MCU_NAME             "AT91SAM7S256"
 
@@ -16,16 +16,18 @@
 // Pybricks modules
 #define PYBRICKS_PY_COMMON              (1)
 #define PYBRICKS_PY_COMMON_CHARGER      (0)
+#define PYBRICKS_PY_COMMON_CONTROL      (1)
 #define PYBRICKS_PY_COMMON_IMU          (0)
 #define PYBRICKS_PY_COMMON_KEYPAD       (1)
 #define PYBRICKS_PY_COMMON_LIGHT_MATRIX (0)
+#define PYBRICKS_PY_COMMON_LOGGER       (1)
 #define PYBRICKS_PY_COMMON_MOTORS       (1)
 #define PYBRICKS_PY_COMMON_SPEAKER      (0)
 #define PYBRICKS_PY_COMMON_SYSTEM       (1)
 #define PYBRICKS_PY_EV3DEVICES          (0)
 #define PYBRICKS_PY_EXPERIMENTAL        (0)
 #define PYBRICKS_PY_GEOMETRY            (0)
-#define PYBRICKS_PY_HUBS                (0)
+#define PYBRICKS_PY_HUBS                (1)
 #define PYBRICKS_PY_IODEVICES           (0)
 #define PYBRICKS_PY_MEDIA               (0)
 #define PYBRICKS_PY_MEDIA_EV3DEV        (0)
@@ -35,6 +37,7 @@
 #define PYBRICKS_PY_PARAMETERS_ICON     (0)
 #define PYBRICKS_PY_PUPDEVICES          (0)
 #define PYBRICKS_PY_ROBOTICS            (1)
+#define PYBRICKS_PY_ROBOTICS_DRIVEBASE_SPIKE (0)
 #define PYBRICKS_PY_TOOLS               (1)
 
 // options to control how MicroPython is built
@@ -101,6 +104,7 @@
 
 #define MICROPY_PERSISTENT_CODE_LOAD    (1)
 #define MICROPY_ENABLE_EXTERNAL_IMPORT  (0)
+#define MICROPY_MODULE_BUILTIN_INIT     (1)
 
 // type definitions for the specific machine
 
@@ -116,13 +120,6 @@ typedef int mp_int_t; // must be pointer size
 typedef unsigned mp_uint_t; // must be pointer size
 
 typedef long mp_off_t;
-
-extern const struct _mp_obj_module_t pb_package_pybricks;
-#define _PYBRICKS_PACKAGE_PYBRICKS \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_pybricks), (mp_obj_t)&pb_package_pybricks },
-
-#define MICROPY_PORT_BUILTIN_MODULES \
-    _PYBRICKS_PACKAGE_PYBRICKS      \
 
 // We need to provide a declaration/definition of alloca()
 #include <alloca.h>

@@ -6,6 +6,7 @@
 #if PYBRICKS_PY_PUPDEVICES
 
 #include <stdint.h>
+#include <string.h>
 
 #include <lego_lwp3.h>
 
@@ -111,6 +112,11 @@ STATIC void pb_type_pupdevices_Remote_light_on(void *context, const pbio_color_h
     };
 
     pbio_color_hsv_to_rgb(hsv, (pbio_color_rgb_t *)msg.payload);
+
+    // The red LED on the handset is weak, so we have to reduce green and blue
+    // to get the colors right.
+    msg.payload[1] = msg.payload[1] * 3 / 8;
+    msg.payload[2] = msg.payload[2] * 3 / 8;
 
     pbdrv_bluetooth_write_remote(&remote->task, &msg.value);
     pb_wait_task(&remote->task, -1);
@@ -307,17 +313,25 @@ STATIC mp_obj_t remote_name(size_t n_args, const mp_obj_t *args) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(remote_name_obj, 1, 2, remote_name);
 
 STATIC const mp_rom_map_elem_t pb_type_pupdevices_Remote_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_buttons), MP_ROM_ATTRIBUTE_OFFSET(pb_type_pupdevices_Remote_obj_t, buttons) },
-    { MP_ROM_QSTR(MP_QSTR_light), MP_ROM_ATTRIBUTE_OFFSET(pb_type_pupdevices_Remote_obj_t, light) },
     { MP_ROM_QSTR(MP_QSTR_name), MP_ROM_PTR(&remote_name_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(pb_type_pupdevices_Remote_locals_dict, pb_type_pupdevices_Remote_locals_dict_table);
 
-const mp_obj_type_t pb_type_pupdevices_Remote = {
-    { &mp_type_type },
-    .name = MP_QSTR_Remote,
-    .make_new = pb_type_pupdevices_Remote_make_new,
-    .locals_dict = (mp_obj_dict_t *)&pb_type_pupdevices_Remote_locals_dict,
+STATIC const pb_attr_dict_entry_t pb_type_pupdevices_Remote_attr_dict[] = {
+    PB_DEFINE_CONST_ATTR_RO(MP_QSTR_buttons, pb_type_pupdevices_Remote_obj_t, buttons),
+    PB_DEFINE_CONST_ATTR_RO(MP_QSTR_light, pb_type_pupdevices_Remote_obj_t, light),
+};
+
+const pb_obj_with_attr_type_t pb_type_pupdevices_Remote = {
+    .type = {
+        .base = { .type = &mp_type_type },
+        .name = MP_QSTR_Remote,
+        .make_new = pb_type_pupdevices_Remote_make_new,
+        .attr = pb_attribute_handler,
+        .locals_dict = (mp_obj_dict_t *)&pb_type_pupdevices_Remote_locals_dict,
+    },
+    .attr_dict = pb_type_pupdevices_Remote_attr_dict,
+    .attr_dict_size = MP_ARRAY_SIZE(pb_type_pupdevices_Remote_attr_dict),
 };
 
 #endif // PYBRICKS_PY_PUPDEVICES

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2018-2021 The Pybricks Authors
 
 #include "py/mpconfig.h"
 
@@ -97,15 +97,23 @@ MP_DEFINE_CONST_FUN_OBJ_KW(iodevices_LUMPDevice_write_obj, 1, iodevices_LUMPDevi
 STATIC const mp_rom_map_elem_t iodevices_LUMPDevice_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read),       MP_ROM_PTR(&iodevices_LUMPDevice_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_write),      MP_ROM_PTR(&iodevices_LUMPDevice_write_obj)},
-    { MP_ROM_QSTR(MP_QSTR_ID),         MP_ROM_ATTRIBUTE_OFFSET(iodevices_LUMPDevice_obj_t, id) },
 };
 STATIC MP_DEFINE_CONST_DICT(iodevices_LUMPDevice_locals_dict, iodevices_LUMPDevice_locals_dict_table);
 
+STATIC const pb_attr_dict_entry_t iodevices_LUMPDevice_attr_dict[] = {
+    PB_DEFINE_CONST_ATTR_RO(MP_QSTR_ID, iodevices_LUMPDevice_obj_t, id),
+};
+
 // type(pybricks.iodevices.LUMPDevice)
-const mp_obj_type_t pb_type_iodevices_LUMPDevice = {
-    { &mp_type_type },
-    .make_new = iodevices_LUMPDevice_make_new,
-    .locals_dict = (mp_obj_dict_t *)&iodevices_LUMPDevice_locals_dict,
+const pb_obj_with_attr_type_t pb_type_iodevices_LUMPDevice = {
+    .type = {
+        .base = { .type = &mp_type_type },
+        .make_new = iodevices_LUMPDevice_make_new,
+        .attr = pb_attribute_handler,
+        .locals_dict = (mp_obj_dict_t *)&iodevices_LUMPDevice_locals_dict,
+    },
+    .attr_dict = iodevices_LUMPDevice_attr_dict,
+    .attr_dict_size = MP_ARRAY_SIZE(iodevices_LUMPDevice_attr_dict),
 };
 
 #endif // PYBRICKS_PY_IODEVICES && PYBRICKS_PY_EV3DEVICES

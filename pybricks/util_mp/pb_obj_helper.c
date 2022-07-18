@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2020 The Pybricks Authors
+// Copyright (c) 2019-2021 The Pybricks Authors
 
 #include <pbio/color.h>
 #include <pbio/error.h>
-
-#include <fixmath.h>
 
 #include "py/mpconfig.h"
 #include "py/obj.h"
@@ -99,17 +97,12 @@ mp_obj_t pb_obj_new_fraction(int32_t numerator, int32_t denominator) {
     #endif
 }
 
-fix16_t pb_obj_get_fix16(mp_obj_t arg) {
-    #if MICROPY_PY_BUILTINS_FLOAT
-    if (mp_obj_is_float(arg)) {
-        return fix16_from_float((float)mp_obj_get_float(arg));
+mp_int_t pb_obj_get_default_abs_int(mp_obj_t obj, mp_int_t default_val) {
+    if (obj == mp_const_none) {
+        return default_val;
     }
-    #endif
-    return fix16_from_int(mp_obj_get_int(arg));
-}
-
-mp_int_t pb_obj_get_default_int(mp_obj_t obj, mp_int_t default_val) {
-    return obj == mp_const_none ? default_val : pb_obj_get_int(obj);
+    mp_int_t value = pb_obj_get_int(obj);
+    return value > 0 ? value: -value;
 }
 
 mp_obj_t pb_obj_get_base_class_obj(mp_obj_t obj, const mp_obj_type_t *type) {
@@ -135,5 +128,70 @@ void pb_assert_type(mp_obj_t obj, const mp_obj_type_t *type) {
         mp_raise_msg_varg(&mp_type_TypeError, MP_ERROR_TEXT("can't convert %s to %s"),
             mp_obj_get_type_str(obj), qstr_str(type->name));
         #endif
+    }
+}
+
+void pb_attribute_handler(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    const mp_obj_type_t *type = mp_obj_get_type(self_in);
+
+    // type may have been subclassed
+    while (type->attr != pb_attribute_handler) {
+        type = type->base.type;
+
+        if (type == &mp_type_type) {
+            // If we get to here, we are at the base type of all types and
+            // there was no parent type that supplied the attributes.In theory,
+            // this should never happen.
+            return;
+        }
+    }
+
+    const pb_attr_dict_entry_t *attr_dict = ((pb_obj_with_attr_type_t *)type)->attr_dict;
+    uint8_t attr_dict_size = ((pb_obj_with_attr_type_t *)type)->attr_dict_size;
+    const pb_attr_dict_entry_t *entry = NULL;
+
+    // Look up the attribute offset.
+    for (int i = 0; i < attr_dict_size; i++) {
+        if (attr_dict[i].name == attr) {
+            entry = &attr_dict[i];
+            break;
+        }
+    }
+
+    if (entry == NULL) {
+        // Attribute not found, continue lookup in locals dict.
+        dest[1] = MP_OBJ_SENTINEL;
+        return;
+    }
+
+    // Object is located at the base address plus the offset.
+    mp_obj_t *obj_addr = (mp_obj_t *)((char *)MP_OBJ_TO_PTR(self_in) + entry->offset);
+
+    // Check if this is a read operation.
+    if (dest[0] == MP_OBJ_NULL) {
+        // It's read. But do it only if allowed and object was not deleted.
+        if (entry->readable && *obj_addr != MP_OBJ_NULL) {
+            dest[0] = *obj_addr;
+        }
+        return;
+    }
+    // Check if this is a delete/write operation.
+    else if (dest[0] == MP_OBJ_SENTINEL) {
+        // It's delete/write. Now check which one.
+        if (dest[1] == MP_OBJ_NULL) {
+            // It's delete. But do it only if allowed and object exists.
+            if (entry->deletable && *obj_addr != MP_OBJ_NULL) {
+                *obj_addr = MP_OBJ_NULL;
+                dest[0] = MP_OBJ_NULL;
+            }
+            return;
+        } else {
+            // It's write. But do it only if if allowed.
+            if (entry->writeable) {
+                *obj_addr = dest[1];
+                dest[0] = MP_OBJ_NULL;
+            }
+            return;
+        }
     }
 }
