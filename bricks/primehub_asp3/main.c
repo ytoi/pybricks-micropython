@@ -14,11 +14,13 @@
 
 #include <pybricks/common.h>
 #include <pybricks/util_mp/pb_obj_helper.h>
+#include <pybricks/util_pb/pb_flash.h>
 
 #include "shared/readline/readline.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/interrupt_char.h"
 #include "shared/runtime/pyexec.h"
+#include "py/builtin.h"
 #include "py/compile.h"
 #include "py/gc.h"
 #include "py/mperrno.h"
@@ -29,26 +31,14 @@
 #include "py/stackctrl.h"
 #include "py/stream.h"
 
+
 // Implementation for MICROPY_EVENT_POLL_HOOK
 void pb_stm32_poll(void) {
     while (pbio_do_one_event()) {
     }
 
-#if 1
     void slp_pybricks(void);
     slp_pybricks();
-#else
-    // There is a possible race condition where an interupt occurs and sets the
-    // Coniki poll_requested flag after all events have been processed. So we
-    // have a critical section where we disable interupts and check see if there
-    // are any last second events. If not, we can call __WFI(), which still wakes
-    // up the CPU on interrupt even though interrupts are otherwise disabled.
-    mp_uint_t state = disable_irq();
-    if (!process_nevents()) {
-        __WFI();
-    }
-    enable_irq(state);
-#endif
 }
 
 static void stm32_main(void) {
@@ -89,10 +79,4 @@ void nlr_jump_fail(void *val) {
     while (1) {
         ;
     }
-}
-
-
-#include <pbdrv/watchdog.h>
-void debug_hang(void) {
-    while(1)pbdrv_watchdog_update();
 }

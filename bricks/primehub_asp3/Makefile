@@ -10,6 +10,17 @@ PB_USE_HAL = 1
 PB_USE_LSM6DS3TR_C = 1
 PB_LIB_BLUENRG = 0
 PB_LIB_BTSTACK = 1
+PB_LIB_LITTLEFS = 1
 PB_LIB_STM32_USB_DEVICE = 1
 
-include ./stm32.mk
+
+include ../stm32/stm32.mk
+
+INC += -I$(PBTOP)/lib/asp3/
+
+all: libpybricks.a
+libpybricks.a: $(OBJ)
+	$(ECHO) "LINK $@"
+	$(ECHO) "OBJ    = $(OBJ)"
+	$(Q)$(AR) rcs $@ $(OBJ)
+

@@ -30,7 +30,9 @@
 
 #define PBDRV_CONFIG_BLUETOOTH                      (1)
 #define PBDRV_CONFIG_BLUETOOTH_BTSTACK              (1)
+#define PBDRV_CONFIG_BLUETOOTH_BTSTACK_CONTROL_GPIO (1)
 #define PBDRV_CONFIG_BLUETOOTH_BTSTACK_STM32_UART   (1)
+#define PBDRV_CONFIG_BLUETOOTH_BTSTACK_HUB_KIND     LWP3_HUB_KIND_TECHNIC_LARGE
 #define PBDRV_CONFIG_BLUETOOTH_BTSTACK_HUB_VARIANT_ADDR 0x08007d80
 
 #define PBDRV_CONFIG_BUTTON                         (1)
@@ -40,6 +42,7 @@
 #define PBDRV_CONFIG_CHARGER_MP2639A                (1)
 #define PBDRV_CONFIG_CHARGER_MP2639A_MODE_PWM       (1)
 #define PBDRV_CONFIG_CHARGER_MP2639A_CHG_RESISTOR_LADDER (1)
+#define PBDRV_CONFIG_CHARGER_MP2639A_ISET_PWM       (1)
 
 #define PBDRV_CONFIG_CLOCK                          (1)
 #define PBDRV_CONFIG_CLOCK_ASP3                    (1)
@@ -47,6 +50,8 @@
 
 #define PBDRV_CONFIG_COUNTER                        (1)
 #define PBDRV_CONFIG_COUNTER_NUM_DEV                (6)
+#define PBDRV_CONFIG_COUNTER_LPF2                   (1)
+#define PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV           (5) // TODO
 
 #define PBDRV_CONFIG_GPIO                           (1)
 #define PBDRV_CONFIG_GPIO_STM32F4                   (1)
@@ -69,10 +74,14 @@
 #define PBDRV_CONFIG_LED_ARRAY_PWM                  (1)
 #define PBDRV_CONFIG_LED_ARRAY_PWM_NUM_DEV          (1)
 
+#define PBDRV_CONFIG_MOTOR_DRIVER                   (1)
+#define PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV           (6)
+#define PBDRV_CONFIG_MOTOR_DRIVER_HBRIDGE_PWM       (1)
+
 #define PBDRV_CONFIG_PWM                            (1)
-#define PBDRV_CONFIG_PWM_NUM_DEV                    (6)
+#define PBDRV_CONFIG_PWM_NUM_DEV                    (7)
 #define PBDRV_CONFIG_PWM_STM32_TIM                  (1)
-#define PBDRV_CONFIG_PWM_STM32_TIM_NUM_DEV          (5)
+#define PBDRV_CONFIG_PWM_STM32_TIM_NUM_DEV          (6)
 #define PBDRV_CONFIG_PWM_STM32_TIM_EXTRA_FLAGS      (1)
 #define PBDRV_CONFIG_PWM_TLC5955_STM32              (1)
 #define PBDRV_CONFIG_PWM_TLC5955_STM32_NUM_DEV      (1)
@@ -92,12 +101,11 @@
 #define PBDRV_CONFIG_UART_STM32F4_LL_IRQ_NUM_UART   (5)
 
 #define PBDRV_CONFIG_USB                            (1)
+#define PBDRV_CONFIG_USB_STM32F4                    (1)
 #define PBDRV_CONFIG_USB_STM32F4_CDC                (1)
 
 #define PBDRV_CONFIG_WATCHDOG                       (1)
 #define PBDRV_CONFIG_WATCHDOG_STM32                 (1)
-
-#define PBDRV_CONFIG_MOTOR          (1)
 
 #define PBDRV_CONFIG_HAS_PORT_A (1)
 #define PBDRV_CONFIG_HAS_PORT_B (1)

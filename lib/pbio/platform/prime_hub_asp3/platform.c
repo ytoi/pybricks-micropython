@@ -20,15 +20,18 @@
 #include "../../drv/bluetooth/bluetooth_btstack_uart_block_stm32_hal.h"
 #include "../../drv/bluetooth/bluetooth_btstack.h"
 #include "../../drv/charger/charger_mp2639a.h"
+#include "../../drv/counter/counter_lpf2.h"
 #include "../../drv/ioport/ioport_lpf2.h"
 #include "../../drv/led/led_array_pwm.h"
 #include "../../drv/led/led_dual.h"
 #include "../../drv/led/led_pwm.h"
+#include "../../drv/motor_driver/motor_driver_hbridge_pwm.h"
 #include "../../drv/pwm/pwm_stm32_tim.h"
 #include "../../drv/pwm/pwm_tlc5955_stm32.h"
-#include "../../drv/sound/sound_stm32_hal_dac.h"
 #include "../../drv/resistor_ladder/resistor_ladder.h"
+#include "../../drv/sound/sound_stm32_hal_dac.h"
 #include "../../drv/uart/uart_stm32f4_ll_irq.h"
+#include "../../drv/usb/usb_stm32.h"
 
 enum {
     COUNTER_PORT_A,
@@ -43,10 +46,10 @@ enum {
 
 enum {
     LED_DEV_0_STATUS,
-    LED_DEV_1_STATUS_TOP,
-    LED_DEV_2_STATUS_BOTTOM,
-    LED_DEV_3_BATTERY,
-    LED_DEV_4_BLUETOOTH,
+    LED_DEV_1_BATTERY,
+    LED_DEV_2_BLUETOOTH,
+    LED_DEV_3_STATUS_TOP,
+    LED_DEV_4_STATUS_BOTTOM,
 };
 
 enum {
@@ -60,6 +63,7 @@ enum {
     PWM_DEV_3_TIM12,
     PWM_DEV_4_TIM8,
     PWM_DEV_5_TLC5955,
+    PWM_DEV_6_TIM5,
 };
 
 enum {
@@ -142,10 +146,43 @@ const pbdrv_bluetooth_btstack_platform_data_t pbdrv_bluetooth_btstack_platform_d
 
 const pbdrv_charger_mp2639a_platform_data_t pbdrv_charger_mp2639a_platform_data = {
     .mode_pwm_id = PWM_DEV_5_TLC5955,
-    .mode_pwm_ch = 33,
+    .mode_pwm_ch = 15,
     .chg_resistor_ladder_id = RESISTOR_LADDER_DEV_0,
     .chg_resistor_ladder_ch = PBDRV_RESISTOR_LADDER_CH_2,
     .ib_adc_ch = 3,
+    .iset_pwm_id = PWM_DEV_6_TIM5,
+    .iset_pwm_ch = 1,
+};
+
+// counters
+
+const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV] = {
+    [COUNTER_PORT_A] = {
+        .counter_id = COUNTER_PORT_A,
+        .port_id = PBIO_PORT_ID_A,
+    },
+    [COUNTER_PORT_B] = {
+        .counter_id = COUNTER_PORT_B,
+        .port_id = PBIO_PORT_ID_B,
+    },
+    [COUNTER_PORT_C] = {
+        .counter_id = COUNTER_PORT_C,
+        .port_id = PBIO_PORT_ID_C,
+    },
+    [COUNTER_PORT_D] = {
+        .counter_id = COUNTER_PORT_D,
+        .port_id = PBIO_PORT_ID_D,
+    },
+    [COUNTER_PORT_E] = {
+        .counter_id = COUNTER_PORT_E,
+        .port_id = PBIO_PORT_ID_E,
+    },
+#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+    [COUNTER_PORT_F] = {
+        .counter_id = COUNTER_PORT_F,
+        .port_id = PBIO_PORT_ID_F,
+    },
+#endif
 };
 
 // I/O ports
@@ -217,14 +254,24 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
 const pbdrv_led_dual_platform_data_t pbdrv_led_dual_platform_data[PBDRV_CONFIG_LED_DUAL_NUM_DEV] = {
     {
         .id = LED_DEV_0_STATUS,
-        .id1 = LED_DEV_1_STATUS_TOP,
-        .id2 = LED_DEV_2_STATUS_BOTTOM,
+        .id1 = LED_DEV_3_STATUS_TOP,
+        .id2 = LED_DEV_4_STATUS_BOTTOM,
     },
+};
+
+static const pbdrv_led_pwm_platform_color_t pbdrv_led_pwm_color = {
+    .r_factor = 1000,
+    .g_factor = 170,
+    .b_factor = 200,
+    .r_brightness = 174,
+    .g_brightness = 1590,
+    .b_brightness = 327,
 };
 
 const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED_PWM_NUM_DEV] = {
     {
-        .id = LED_DEV_1_STATUS_TOP,
+        .color = &pbdrv_led_pwm_color,
+        .id = LED_DEV_3_STATUS_TOP,
         .r_id = PWM_DEV_5_TLC5955,
         .r_ch = 5,
         .g_id = PWM_DEV_5_TLC5955,
@@ -234,7 +281,8 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
         .scale_factor = 35,
     },
     {
-        .id = LED_DEV_2_STATUS_BOTTOM,
+        .color = &pbdrv_led_pwm_color,
+        .id = LED_DEV_4_STATUS_BOTTOM,
         .r_id = PWM_DEV_5_TLC5955,
         .r_ch = 8,
         .g_id = PWM_DEV_5_TLC5955,
@@ -244,7 +292,8 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
         .scale_factor = 35,
     },
     {
-        .id = LED_DEV_3_BATTERY,
+        .color = &pbdrv_led_pwm_color,
+        .id = LED_DEV_1_BATTERY,
         .r_id = PWM_DEV_5_TLC5955,
         .r_ch = 2,
         .g_id = PWM_DEV_5_TLC5955,
@@ -254,7 +303,8 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
         .scale_factor = 35,
     },
     {
-        .id = LED_DEV_4_BLUETOOTH,
+        .color = &pbdrv_led_pwm_color,
+        .id = LED_DEV_2_BLUETOOTH,
         .r_id = PWM_DEV_5_TLC5955,
         .r_ch = 20,
         .g_id = PWM_DEV_5_TLC5955,
@@ -277,6 +327,90 @@ const pbdrv_led_array_pwm_platform_data_t pbdrv_led_array_pwm_platform_data[PBDR
         .num_pwm_chs = 25,
         .pwm_id = PWM_DEV_5_TLC5955,
         .id = LED_ARRAY_DEV_0_LIGHT_MATRIX,
+    },
+};
+
+// Motor driver
+
+const pbdrv_motor_driver_hbridge_pwm_platform_data_t
+    pbdrv_motor_driver_hbridge_pwm_platform_data[PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV] = {
+    // Port A
+    {
+        .pin1_gpio.bank = GPIOE,
+        .pin1_gpio.pin = 9,
+        .pin1_alt = GPIO_AF1_TIM1,
+        .pin1_pwm_id = PWM_DEV_0_TIM1,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOE,
+        .pin2_gpio.pin = 11,
+        .pin2_alt = GPIO_AF1_TIM1,
+        .pin2_pwm_id = PWM_DEV_0_TIM1,
+        .pin2_pwm_ch = 2,
+    },
+    // Port B
+    {
+        .pin1_gpio.bank = GPIOE,
+        .pin1_gpio.pin = 13,
+        .pin1_alt = GPIO_AF1_TIM1,
+        .pin1_pwm_id = PWM_DEV_0_TIM1,
+        .pin1_pwm_ch = 3,
+        .pin2_gpio.bank = GPIOE,
+        .pin2_gpio.pin = 14,
+        .pin2_alt = GPIO_AF1_TIM1,
+        .pin2_pwm_id = PWM_DEV_0_TIM1,
+        .pin2_pwm_ch = 4,
+    },
+    // Port C
+    {
+        .pin1_gpio.bank = GPIOB,
+        .pin1_gpio.pin = 6,
+        .pin1_alt = GPIO_AF2_TIM4,
+        .pin1_pwm_id = PWM_DEV_2_TIM4,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 7,
+        .pin2_alt = GPIO_AF2_TIM4,
+        .pin2_pwm_id = PWM_DEV_2_TIM4,
+        .pin2_pwm_ch = 2,
+    },
+    // Port D
+    {
+        .pin1_gpio.bank = GPIOB,
+        .pin1_gpio.pin = 8,
+        .pin1_alt = GPIO_AF2_TIM4,
+        .pin1_pwm_id = PWM_DEV_2_TIM4,
+        .pin1_pwm_ch = 3,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 9,
+        .pin2_alt = GPIO_AF2_TIM4,
+        .pin2_pwm_id = PWM_DEV_2_TIM4,
+        .pin2_pwm_ch = 4,
+    },
+    // Port E
+    {
+        .pin1_gpio.bank = GPIOC,
+        .pin1_gpio.pin = 6,
+        .pin1_alt = GPIO_AF2_TIM3,
+        .pin1_pwm_id = PWM_DEV_1_TIM3,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOC,
+        .pin2_gpio.pin = 7,
+        .pin2_alt = GPIO_AF2_TIM3,
+        .pin2_pwm_id = PWM_DEV_1_TIM3,
+        .pin2_pwm_ch = 2,
+    },
+    // Port F TODO
+    {
+        .pin1_gpio.bank = GPIOC,
+        .pin1_gpio.pin = 8,
+        .pin1_alt = GPIO_AF2_TIM3,
+        .pin1_pwm_id = PWM_DEV_1_TIM3,
+        .pin1_pwm_ch = 3,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 1,
+        .pin2_alt = GPIO_AF2_TIM3,
+        .pin2_pwm_id = PWM_DEV_1_TIM3,
+        .pin2_pwm_ch = 4,
     },
 };
 
@@ -317,6 +451,17 @@ static void pwm_dev_4_platform_init(void) {
 
     // channel 4 has constant 50% duty cycle since it acts as a clock
     TIM8->CCR4 = TIM8->ARR / 2;
+}
+
+static void pwm_dev_6_platform_init(void) {
+    GPIO_InitTypeDef gpio_init;
+
+    gpio_init.Pin = GPIO_PIN_0;
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio_init.Alternate = GPIO_AF2_TIM5;
+    HAL_GPIO_Init(GPIOA, &gpio_init);
 }
 
 // NOTE: Official LEGO firmware uses 1.2 kHz PWM for motors. We have changed to
@@ -378,6 +523,15 @@ const pbdrv_pwm_stm32_tim_platform_data_t
         .id = PWM_DEV_4_TIM8,
         // channel 4: Bluetooth 32.768 kHz clock
         .channels = PBDRV_PWM_STM32_TIM_CHANNEL_4_ENABLE,
+    },
+    {
+        .platform_init = pwm_dev_6_platform_init,
+        .TIMx = TIM5,
+        .prescalar = 10, // results in 9.6 MHz clock
+        .period = 100, // 9.6 MHz divided by 100 makes 96 kHz PWM
+        .id = PWM_DEV_6_TIM5,
+        // channel 1: Battery charger ISET
+        .channels = PBDRV_PWM_STM32_TIM_CHANNEL_1_ENABLE,
     },
 };
 
@@ -517,32 +671,25 @@ void UART10_IRQHandler(void) {
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDEV_NUM_DEV] = {
     [COUNTER_PORT_A] = {
         .uart_id = UART_PORT_A,
-        .counter_id = COUNTER_PORT_A,
     },
     [COUNTER_PORT_B] = {
         .uart_id = UART_PORT_B,
-        .counter_id = COUNTER_PORT_B,
     },
     [COUNTER_PORT_C] = {
         .uart_id = UART_PORT_C,
-        .counter_id = COUNTER_PORT_C,
     },
     [COUNTER_PORT_D] = {
         .uart_id = UART_PORT_D,
-        .counter_id = COUNTER_PORT_D,
     },
     [COUNTER_PORT_E] = {
         .uart_id = UART_PORT_E,
-        .counter_id = COUNTER_PORT_E,
     },
 #if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
     [COUNTER_PORT_F] = {
         .uart_id = UART_PORT_F,
-        .counter_id = COUNTER_PORT_F,
     },
 #endif
 };
-
 
 // STM32 HAL integration
 
@@ -662,6 +809,30 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
         gpio_init.Alternate = GPIO_AF5_SPI1;
         HAL_GPIO_Init(GPIOA, &gpio_init);
     }
+    if (hspi->Instance == SPI2) {
+        // External flash
+        GPIO_InitTypeDef gpio_init;
+
+        // /CS, active low
+        gpio_init.Pin = GPIO_PIN_12;
+        gpio_init.Mode = GPIO_MODE_OUTPUT_PP;
+        gpio_init.Pull = GPIO_NOPULL;
+        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+
+        // SPI2_SCK
+        gpio_init.Pin = GPIO_PIN_13;
+        gpio_init.Mode = GPIO_MODE_AF_PP;
+        gpio_init.Pull = GPIO_NOPULL;
+        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+        gpio_init.Alternate = GPIO_AF5_SPI2;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+
+        // SPI2_MISO | SPI2_MOSI
+        gpio_init.Pin = GPIO_PIN_2 | GPIO_PIN_3;
+        HAL_GPIO_Init(GPIOC, &gpio_init);
+    }
 }
 
 void SPI1_IRQHandler(void) {
@@ -670,43 +841,60 @@ void SPI1_IRQHandler(void) {
 #endif
 
 // USB
-#if PBDRV_CONFIG_USB_STM32F4_CDC
+#if PBDRV_CONFIG_USB_STM32F4
 void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
-    GPIO_InitTypeDef GPIO_InitStruct;
+    GPIO_InitTypeDef gpio_init;
 
     // Data pins
-    GPIO_InitStruct.Pin = (GPIO_PIN_11 | GPIO_PIN_12);
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    gpio_init.Pin = (GPIO_PIN_11 | GPIO_PIN_12);
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_HIGH;
+    gpio_init.Alternate = GPIO_AF10_OTG_FS;
+    HAL_GPIO_Init(GPIOA, &gpio_init);
 
     // VBUS pin
-    GPIO_InitStruct.Pin = GPIO_PIN_9;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    gpio_init.Pin = GPIO_PIN_9;
+    gpio_init.Mode = GPIO_MODE_IT_RISING_FALLING;
+    gpio_init.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &gpio_init);
 
     #if PBIO_ON_ASP3
+    // TODO
     ena_int(OTG_FS_IRQn + 16);
     #else
     HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+    HAL_NVIC_SetPriority(EXTI9_5_IRQn, 6, 1);
+    HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
     #endif
+
+    // ensure correct inital state
+    HAL_GPIO_EXTI_Callback(GPIO_PIN_9);
 }
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
     #if PBIO_ON_ASP3
+    // TODO
     dis_int(OTG_FS_IRQn + 16);
     #else
+    HAL_NVIC_DisableIRQ(EXTI9_5_IRQn);
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     #endif
 }
 
 void OTG_FS_IRQHandler(void) {
-    extern PCD_HandleTypeDef hpcd;
-    HAL_PCD_IRQHandler(&hpcd);
+    pbdrv_usb_stm32_handle_otg_fs_irq();
+}
+
+void EXTI9_5_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_9);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t pin) {
+    if (pin == GPIO_PIN_9) {
+        pbdrv_usb_stm32_handle_vbus_irq(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9));
+    }
 }
 #endif
 
@@ -751,6 +939,7 @@ void I2C2_EV_IRQHandler(void) {
     mod_experimental_IMU_handle_i2c_ev_irq();
 }
 
+// Early initialization
 
 // Called from hardware_init_hook() in asp3/target/primehub_gcc/target_kernel_impl.c
 void pb_SystemInit(void) {
@@ -759,6 +948,7 @@ void pb_SystemInit(void) {
 
     // bootloader disables interrupts
     __enable_irq();
+
 #if 0
     // Using external 16Mhz oscillator
     RCC_OscInitTypeDef osc_init;
@@ -792,13 +982,12 @@ void pb_SystemInit(void) {
         RCC_AHB1ENR_GPIODEN | RCC_AHB1ENR_GPIOEEN | RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMA2EN;
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN | RCC_APB1ENR_UART4EN | RCC_APB1ENR_UART5EN |
         RCC_APB1ENR_UART7EN | RCC_APB1ENR_UART8EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN |
-        RCC_APB1ENR_TIM4EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM12EN | RCC_APB1ENR_I2C2EN |
-        RCC_APB1ENR_DACEN;
+        RCC_APB1ENR_TIM4EN | RCC_APB1ENR_TIM5EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM12EN |
+        RCC_APB1ENR_I2C2EN | RCC_APB1ENR_DACEN | RCC_APB1ENR_SPI2EN;
     RCC->APB2ENR |= RCC_APB2ENR_TIM1EN | RCC_APB2ENR_TIM8EN | RCC_APB2ENR_UART9EN |
         RCC_APB2ENR_UART10EN | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SYSCFGEN;
     RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
 
-#if 1
     // Keep main power on (PA13)
     GPIO_InitTypeDef gpio_init = {
         .Pin = GPIO_PIN_13,
@@ -806,5 +995,4 @@ void pb_SystemInit(void) {
     };
     HAL_GPIO_Init(GPIOA, &gpio_init);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_13, GPIO_PIN_SET);
-#endif
 }
