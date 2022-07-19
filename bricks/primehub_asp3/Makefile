@@ -14,13 +14,4 @@ PB_LIB_LITTLEFS = 1
 PB_LIB_STM32_USB_DEVICE = 1
 
 
-include ../stm32/stm32.mk
-
-INC += -I$(PBTOP)/lib/asp3/
-
-all: libpybricks.a
-libpybricks.a: $(OBJ)
-	$(ECHO) "LINK $@"
-	$(ECHO) "OBJ    = $(OBJ)"
-	$(Q)$(AR) rcs $@ $(OBJ)
-
+include ./stm32.mk

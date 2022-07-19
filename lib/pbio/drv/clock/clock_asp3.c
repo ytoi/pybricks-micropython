@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2013, 2014 Damien P. George
 // Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//                    Graduate School of Information Science, Nagoya Univ., JAPAN
 
 #include <contiki.h>
 
@@ -21,6 +23,15 @@ uint32_t pbdrv_clock_get_ms(void) {
     return pbdrv_clock_ticks;
 }
 
+// TODO: use get_tim() of ASP3 API.
+uint32_t pbdrv_clock_get_100us(void) {
+#if 0
+    SYSTIM stime;
+    SVC_PERROR(get_tim(&stime));
+    return stime*10;
+#endif
+    return pbdrv_clock_ticks * 10;
+}
 uint32_t pbdrv_clock_get_us(void) {
     return pbdrv_clock_ticks * 1000;
 }
