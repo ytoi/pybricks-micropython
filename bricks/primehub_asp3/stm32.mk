@@ -175,7 +175,6 @@ SRC_C = $(addprefix bricks/primehub_asp3/,\
 # between the top level directory and the micropython/ subdirectory.
 
 SRC_C += $(addprefix shared/,\
-	libc/string0.c \
 	readline/readline.c \
 	runtime/gchelper_native.c \
 	runtime/interrupt_char.c \
@@ -605,7 +604,10 @@ $(BUILD)/genhdr/%.h: $(PBTOP)/lib/pbio/drv/bluetooth/%.gatt
 
 endif
 
-libpybricks.a: $(OBJ)
+.PHONY: libpybricks.a
+libpybricks.a: $(BUILD)/libpybricks.a
+
+$(BUILD)/libpybricks.a: $(OBJ)
 	$(ECHO) "LINK $@"
 	$(ECHO) "OBJ    = $(OBJ)"
 	$(Q)$(AR) rcs $@ $(OBJ)

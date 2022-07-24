@@ -862,6 +862,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     #if PBIO_ON_ASP3
     // TODO
     ena_int(OTG_FS_IRQn + 16);
+    ena_int(EXTI9_5_IRQn + 16);
     #else
     HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
