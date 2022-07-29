@@ -574,7 +574,10 @@ $(BUILD)/genhdr/%.h: $(PBTOP)/lib/pbio/drv/bluetooth/%.gatt
 
 endif
 
-libpybricks.a: $(OBJ)
+.PHONY: libpybricks.a
+libpybricks.a: $(BUILD)/libpybricks.a
+
+$(BUILD)/libpybricks.a: $(OBJ)
 	$(ECHO) "LINK $@"
 	$(ECHO) "OBJ    = $(OBJ)"
 	$(Q)$(AR) rcs $@ $(OBJ)
