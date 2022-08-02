@@ -162,7 +162,6 @@ SRC_C = $(addprefix bricks/primehub_asp3/,\
 # between the top level directory and the micropython/ subdirectory.
 
 SRC_C += $(addprefix shared/,\
-	libc/string0.c \
 	readline/readline.c \
 	runtime/gchelper_native.c \
 	runtime/interrupt_char.c \
