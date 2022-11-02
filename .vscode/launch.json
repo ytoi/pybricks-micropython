@@ -54,13 +54,19 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "ev3dev-host",
+            "name": "ev3dev-test",
             "type": "cppdbg",
             "request": "launch",
+            "cwd": "${workspaceFolder}/micropython/tests",
             "program": "${workspaceFolder}/bricks/ev3dev/pybricks-micropython",
+            "args": [
+                "../../tests/ev3dev/brick/battery.py"
+            ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/ports/pybricks",
-            "environment": [],
+            "environment": [
+                {"name": "GRX_PLUGIN_PATH", "value": "../../bricks/ev3dev/build-test"},
+                {"name": "GRX_DRIVER", "value": "test"}
+            ],
             "externalConsole": true,
             "MIMode": "gdb",
             "setupCommands": [
@@ -71,16 +77,59 @@
                 },
                 {
                     "description": "ignore SIGUSR1",
-                    "text": "handle SIGUSR1 noprint pass",
-                    "ignoreFailures": false
+                    "text": "handle SIGUSR1 noprint pass"
                 },
                 {
                     "description": "ignore SIGUSR2",
-                    "text": "handle SIGUSR2 noprint pass",
+                    "text": "handle SIGUSR2 noprint pass"
+                },
+                {
+                    "description": "ignore SIGRT39",
+                    "text": "handle SIGUSR2 noprint pass"
+                }
+            ],
+            "logging": { "engineLogging": true, "trace": true, "traceResponse": true },
+            "preLaunchTask": "build ev3dev-test"
+        },
+        {
+            "name": "virtualhub",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bricks/virtualhub/build-debug/virtualhub-micropython",
+            "args": [
+                "./tests/motors/single_motor.py"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PYTHONPATH",
+                    "value": "lib/pbio/cpython"
+                },
+                {
+                    "name": "PBIO_VIRTUAL_PLATFORM_MODULE",
+                    "value": "pbio_virtual.platform.robot"
+                },
+                {
+                    "name": "PATH",
+                    "value": "${workspaceFolder}/.venv/bin:${env:PATH}",
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Ignore timer signal",
+                    "text": "handle SIG34 noprint pass",
                     "ignoreFailures": false
                 }
             ],
-            "preLaunchTask": "build ev3dev-host"
+            "preLaunchTask": "build virtualhub"
         },
         {
             "name": "test-pbio",
@@ -124,7 +173,7 @@
             "type": "cortex-debug",
             "request": "launch",
             "servertype": "openocd",
-            "executable": "${workspaceRoot}/bricks/debug/build/firmware-no-checksum.elf",
+            "executable": "${workspaceRoot}/bricks/debug/build/firmware.elf",
             "preLaunchTask": "build debug",
             "device": "STM32F446ZE",
             "configFiles": [
@@ -162,6 +211,9 @@
                 "drv/counter/test_counter_get",
                 "drv/pwm/test_pwm_get",
                 "drv/pwm/test_pwm_set_duty",
+                "src/battery/test_battery_voltage_to_duty",
+                "src/battery/test_battery_voltage_from_duty",
+                "src/battery/test_battery_voltage_from_duty_pct",
                 "src/color/test_rgb_to_hsv",
                 "src/color/test_hsv_to_rgb",
                 "src/color/test_color_to_hsv",
@@ -171,15 +223,26 @@
                 "src/light/test_color_light",
                 "src/light/test_light_matrix",
                 "src/light/test_light_matrix_rotation",
+                "src/math/test_atan2",
+                "src/math/test_clamp",
+                "src/math/test_mult_and_scale",
                 "src/math/test_sqrt",
-                "src/math/test_mul_i32_fix16",
-                "src/math/test_div_i32_fix16",
                 "src/motor/test_servo_run_angle",
                 "src/motor/test_servo_run_time",
+                "src/task/test_no_yield_task",
+                "src/task/test_task_removed_when_complete",
+                "src/task/test_task_cancelation",
+                "src/task/test_task_removal",
+                "src/trajectory/test_simple_trajectory",
+                "src/trajectory/test_infinite_trajectory",
+                "src/trajectory/test_position_trajectory",
                 "src/uartdev/test_boost_color_distance_sensor",
                 "src/uartdev/test_boost_interactive_motor",
                 "src/uartdev/test_technic_large_motor",
                 "src/uartdev/test_technic_xl_motor",
+                "src/util/test_uuid128_reverse_compare",
+                "src/util/test_uuid128_reverse_copy",
+                "src/util/test_oneshot",
                 "sys/bluetooth/test_bluetooth",
                 "sys/status/test_status",
             ]

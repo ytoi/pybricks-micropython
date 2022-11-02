@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2013, 2014 Damien P. George
-# Copyright (c) 2019-2021 The Pybricks Authors
+# Copyright (c) 2019-2022 The Pybricks Authors
 
 # This file is shared by all STM32-based Pybricks ports
 # Other ports should not use this file
@@ -36,6 +36,15 @@ ifeq ("$(wildcard ../../lib/btstack/README.md)","")
 $(info GIT cloning btstack submodule)
 $(info $(shell cd ../.. && git submodule update --checkout --init lib/btstack))
 ifeq ("$(wildcard ../../lib/btstack/README.md)","")
+$(error failed)
+endif
+endif
+endif
+ifeq ($(PB_LIB_LITTLEFS),1)
+ifeq ("$(wildcard ../../lib/littlefs/README.md)","")
+$(info GIT cloning littlefs submodule)
+$(info $(shell cd ../.. && git submodule update --checkout --init lib/littlefs))
+ifeq ("$(wildcard ../../lib/littlefs/README.md)","")
 $(error failed)
 endif
 endif
@@ -99,6 +108,9 @@ ifeq ($(PB_LIB_BTSTACK),1)
 INC += -I$(PBTOP)/lib/btstack/chipset/cc256x
 INC += -I$(PBTOP)/lib/btstack/src
 endif
+ifeq ($(PB_LIB_LITTLEFS),1)
+INC += -I$(PBTOP)/lib/littlefs
+endif
 ifeq ($(PB_USE_LSM6DS3TR_C),1)
 INC += -I$(PBTOP)/lib/lsm6ds3tr_c_STdC/driver
 endif
@@ -112,10 +124,14 @@ INC += -I$(BUILD)
 GIT = git
 
 CFLAGS_MCU_F0 = -mthumb -mtune=cortex-m0 -mcpu=cortex-m0  -msoft-float
-#CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4  -msoft-float
+CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+#CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4  -msoft-float
 CFLAGS_MCU_L4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-CFLAGS = $(INC) -Wall -Werror -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB_MCU_SERIES)) $(COPT) $(CFLAGS_EXTRA)
+CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-maybe-uninitialized
+CFLAGS = $(INC) -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB_MCU_SERIES)) $(CFLAGS_WARN) $(COPT) $(CFLAGS_EXTRA)
+$(BUILD)/lib/libm/%.o: CFLAGS += -Wno-sign-compare
+$(BUILD)/lib/stm32lib/%.o: CFLAGS += -Wno-sign-compare
+$(BUILD)/lib/STM32_USB_Device_Library/%.o: CFLAGS += -Wno-sign-compare
 
 # run pybricks on asp3
 CFLAGS += -DPYBRICKS_ON_ASP3
@@ -142,9 +158,6 @@ CFLAGS += -DSTM32_H='<stm32$(PB_MCU_SERIES_LCASE)xx.h>'
 CFLAGS += -DSTM32_HAL_H='<stm32$(PB_MCU_SERIES_LCASE)xx_hal.h>'
 
 MPY_CROSS = ../../micropython/mpy-cross/mpy-cross
-# TODO: probably only need no-unicode on movehub
-MPY_CROSS_FLAGS += -mno-unicode
-
 
 LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
@@ -234,13 +247,16 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	pybricks.c \
 	robotics/pb_module_robotics.c \
 	robotics/pb_type_drivebase.c \
+	robotics/pb_type_spikebase.c \
 	tools/pb_module_tools.c \
 	tools/pb_type_stopwatch.c \
 	util_mp/pb_obj_helper.c \
 	util_mp/pb_type_enum.c \
 	util_pb/pb_color_map.c \
 	util_pb/pb_conversions.c \
+	util_pb/pb_device_stm32.c \
 	util_pb/pb_error.c \
+	util_pb/pb_flash.c \
 	util_pb/pb_imu.c \
 	util_pb/pb_task.c \
 	)
@@ -308,6 +324,13 @@ BTSTACK_SRC_C += $(addprefix lib/btstack/src/ble/,\
 
 BTSTACK_SRC_C += $(addprefix lib/btstack/chipset/cc256x/,\
 	btstack_chipset_cc256x.c \
+	)
+
+# Littlefs
+
+LITTLEFS_SRC_C = $(addprefix lib/littlefs/,\
+	lfs_util.c \
+	lfs.c \
 	)
 
 # Contiki
@@ -387,7 +410,6 @@ LIBFIXMATH_SRC_C = $(addprefix lib/libfixmath/libfixmath/,\
 # Pybricks I/O library
 
 PBIO_SRC_C = $(addprefix lib/pbio/,\
-	drv/$(PBIO_PLATFORM)/motor.c \
 	drv/adc/adc_stm32_hal.c \
 	drv/adc/adc_stm32f0.c \
 	drv/battery/battery_adc.c \
@@ -406,6 +428,7 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/clock/clock_asp3.c \
 	drv/core.c \
 	drv/counter/counter_core.c \
+	drv/counter/counter_lpf2.c \
 	drv/counter/counter_stm32f0_gpio_quad_enc.c \
 	drv/gpio/gpio_stm32f0.c \
 	drv/gpio/gpio_stm32f4.c \
@@ -416,6 +439,7 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/led/led_core.c \
 	drv/led/led_dual.c \
 	drv/led/led_pwm.c \
+	drv/motor_driver/motor_driver_hbridge_pwm.c \
 	drv/pwm/pwm_core.c \
 	drv/pwm/pwm_lp50xx_stm32.c \
 	drv/pwm/pwm_stm32_tim.c \
@@ -426,14 +450,16 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/uart/uart_stm32f0.c \
 	drv/uart/uart_stm32f4_ll_irq.c \
 	drv/uart/uart_stm32l4_ll_dma.c \
-	drv/usb/stm32_usb_serial.c \
+	drv/usb/usb_stm32.c \
+	drv/usb/usb_stm32_serial.c \
 	drv/watchdog/watchdog_stm32.c \
-	platform/motors/settings.c \
 	platform/$(PBIO_PLATFORM)/platform.c \
 	platform/$(PBIO_PLATFORM)/sys.c \
+	src/angle.c \
 	src/battery.c \
 	src/color/conversion.c \
 	src/control.c \
+	src/control_settings.c \
 	src/dcmotor.c \
 	src/drivebase.c \
 	src/error.c \
@@ -446,14 +472,15 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	src/main.c \
 	src/math.c \
 	src/motor_process.c \
+	src/motor/servo_settings.c \
 	src/observer.c \
+	src/parent.c \
 	src/protocol/lwp3.c \
 	src/protocol/nus.c \
 	src/protocol/pybricks.c \
 	src/servo.c \
 	src/tacho.c \
 	src/task.c \
-	src/trajectory_ext.c \
 	src/trajectory.c \
 	src/uartdev.c \
 	src/util.c \
@@ -533,6 +560,10 @@ OBJ += $(addprefix $(BUILD)/, $(BLE5STACK_SRC_C:.c=.o))
 endif
 ifeq ($(PB_LIB_BTSTACK),1)
 OBJ += $(addprefix $(BUILD)/, $(BTSTACK_SRC_C:.c=.o))
+endif
+ifeq ($(PB_LIB_LITTLEFS),1)
+CFLAGS+= -DLFS_NO_ASSERT -DLFS_NO_MALLOC -DLFS_NO_DEBUG -DLFS_NO_WARN -DLFS_NO_ERROR
+OBJ += $(addprefix $(BUILD)/, $(LITTLEFS_SRC_C:.c=.o))
 endif
 ifeq ($(PB_USE_HAL),1)
 OBJ += $(addprefix $(BUILD)/, $(HAL_SRC_C:.c=.o))

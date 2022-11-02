@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 #include "py/mpconfig.h"
 
@@ -13,8 +13,23 @@
 #include <pybricks/parameters.h>
 
 #include <pybricks/util_pb/pb_error.h>
+#include <pybricks/util_pb/pb_device.h>
 #include <pybricks/util_mp/pb_obj_helper.h>
 #include <pybricks/util_mp/pb_kwarg_helper.h>
+
+static pbio_port_id_t get_port_from_object(mp_obj_t self_in) {
+    if (mp_obj_is_type(self_in, &pb_type_Motor.type)) {
+        return ((common_Motor_obj_t *)MP_OBJ_TO_PTR(self_in))->port;
+    }
+    return ((common_DCMotor_obj_t *)MP_OBJ_TO_PTR(self_in))->port;
+}
+
+static pbio_dcmotor_t *get_dcmotor_from_object(mp_obj_t self_in) {
+    if (mp_obj_is_type(self_in, &pb_type_Motor.type)) {
+        return ((common_Motor_obj_t *)MP_OBJ_TO_PTR(self_in))->srv->dcmotor;
+    }
+    return ((common_DCMotor_obj_t *)MP_OBJ_TO_PTR(self_in))->dcmotor;
+}
 
 // pybricks._common.DCMotor.__init__
 STATIC mp_obj_t common_DCMotor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
@@ -26,18 +41,18 @@ STATIC mp_obj_t common_DCMotor_make_new(const mp_obj_type_t *type, size_t n_args
     pbio_port_id_t port = pb_type_enum_get_value(port_in, &pb_enum_type_Port);
     pbio_direction_t direction = pb_type_enum_get_value(positive_direction_in, &pb_enum_type_Direction);
 
+    pb_device_setup_motor(port, false);
+
     // Get and initialize DC Motor
-    pbio_dcmotor_t *dc;
-    pbio_error_t err;
-    while ((err = pbio_dcmotor_get(port, &dc, direction, false)) == PBIO_ERROR_AGAIN) {
-        mp_hal_delay_ms(1000);
-    }
-    pb_assert(err);
+    pbio_dcmotor_t *dcmotor;
+    pb_assert(pbio_dcmotor_get_dcmotor(port, &dcmotor));
+    pb_assert(pbio_dcmotor_setup(dcmotor, direction));
 
     // On success, create and return the MicroPython object
     common_DCMotor_obj_t *self = m_new_obj(common_DCMotor_obj_t);
     self->base.type = (mp_obj_type_t *)type;
-    self->dcmotor = dc;
+    self->dcmotor = dcmotor;
+    self->port = port;
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -45,14 +60,11 @@ STATIC mp_obj_t common_DCMotor_make_new(const mp_obj_type_t *type, size_t n_args
 // pybricks._common.Motor.__repr__
 void common_DCMotor_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
 
-    // Get the dcmotor from self, which is either Motor or DCMotor
-    pbio_dcmotor_t *dcmotor = mp_obj_is_type(self_in, &pb_type_Motor) ?
-        ((common_Motor_obj_t *)MP_OBJ_TO_PTR(self_in))->srv->dcmotor :
-        ((common_DCMotor_obj_t *)MP_OBJ_TO_PTR(self_in))->dcmotor;
+    pbio_port_id_t port = get_port_from_object(self_in);
+    pbio_dcmotor_t *dcmotor = get_dcmotor_from_object(self_in);
 
     mp_printf(print, "%q(Port.%c, %q.%q)",
-        ((mp_obj_base_t *)MP_OBJ_TO_PTR(self_in))->type->name,
-        dcmotor->port, MP_QSTR_Direction,
+        ((mp_obj_base_t *)MP_OBJ_TO_PTR(self_in))->type->name, port, MP_QSTR_Direction,
         dcmotor->direction == PBIO_DIRECTION_CLOCKWISE ? MP_QSTR_CLOCKWISE : MP_QSTR_COUNTERCLOCKWISE);
 }
 
@@ -65,19 +77,8 @@ STATIC mp_obj_t common_DCMotor_duty(size_t n_args, const mp_obj_t *pos_args, mp_
 
     // pbio has only voltage setters now, but the .dc() method will continue to
     // exist for backwards compatibility. So, we convert duty cycle to voltages.
-    int32_t voltage = pbio_battery_get_voltage_from_duty(pb_obj_get_int(duty_in) * 100);
-
-    // Object type is either Motor or DCMotor
-    bool is_servo = mp_obj_is_type(pos_args[0], &pb_type_Motor);
-
-    if (is_servo) {
-        common_Motor_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
-        pb_assert(pbio_servo_set_voltage_passive(self->srv, voltage));
-    } else {
-        common_DCMotor_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
-        pb_assert(pbio_dcmotor_set_voltage_passive(self->dcmotor, voltage));
-    }
-
+    int32_t voltage = pbio_battery_get_voltage_from_duty_pct(pb_obj_get_int(duty_in));
+    pb_assert(pbio_dcmotor_user_command(get_dcmotor_from_object(pos_args[0]), false, voltage));
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(common_DCMotor_duty_obj, 1, common_DCMotor_duty);
@@ -85,17 +86,7 @@ MP_DEFINE_CONST_FUN_OBJ_KW(common_DCMotor_duty_obj, 1, common_DCMotor_duty);
 // pybricks._common.DCMotor.stop
 // pybricks._common.Motor.stop
 STATIC mp_obj_t common_DCMotor_stop(mp_obj_t self_in) {
-
-    // Object type is either Motor or DCMotor
-    bool is_servo = mp_obj_is_type(self_in, &pb_type_Motor);
-
-    if (is_servo) {
-        common_Motor_obj_t *self = MP_OBJ_TO_PTR(self_in);
-        pb_assert(pbio_servo_stop(self->srv, PBIO_ACTUATION_COAST));
-    } else {
-        common_DCMotor_obj_t *self = MP_OBJ_TO_PTR(self_in);
-        pb_assert(pbio_dcmotor_coast(self->dcmotor));
-    }
+    pb_assert(pbio_dcmotor_user_command(get_dcmotor_from_object(self_in), true, 0));
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_1(common_DCMotor_stop_obj, common_DCMotor_stop);
@@ -103,22 +94,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(common_DCMotor_stop_obj, common_DCMotor_stop);
 // pybricks._common.DCMotor.brake
 // pybricks._common.Motor.brake
 STATIC mp_obj_t common_DCMotor_brake(mp_obj_t self_in) {
-
-    // Object type is either Motor or DCMotor
-    bool is_servo = mp_obj_is_type(self_in, &pb_type_Motor);
-
-    if (is_servo) {
-        common_Motor_obj_t *self = MP_OBJ_TO_PTR(self_in);
-        pb_assert(pbio_servo_stop(self->srv, PBIO_ACTUATION_BRAKE));
-    } else {
-        common_DCMotor_obj_t *self = MP_OBJ_TO_PTR(self_in);
-        #if PYBRICKS_PY_EV3DEVICES
-        // Workaround for ev3dev dc-motor not coasting on first try
-        pb_assert(pbio_dcmotor_set_voltage_passive(self->dcmotor, 100));
-        mp_hal_delay_ms(1);
-        #endif
-        pb_assert(pbio_dcmotor_brake(self->dcmotor));
-    }
+    pb_assert(pbio_dcmotor_user_command(get_dcmotor_from_object(self_in), false, 0));
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_1(common_DCMotor_brake_obj, common_DCMotor_brake);
@@ -131,12 +107,7 @@ STATIC mp_obj_t common_DCMotor_dc_settings(size_t n_args, const mp_obj_t *pos_ar
         PB_ARG_DEFAULT_NONE(max_voltage));
 
     // Get dcmotor from object
-    pbio_dcmotor_t *dcmotor;
-    if (mp_obj_is_type(pos_args[0], &pb_type_Motor)) {
-        dcmotor = ((common_Motor_obj_t *)MP_OBJ_TO_PTR(pos_args[0]))->srv->dcmotor;
-    } else {
-        dcmotor = ((common_DCMotor_obj_t *)MP_OBJ_TO_PTR(pos_args[0]))->dcmotor;
-    }
+    pbio_dcmotor_t *dcmotor = get_dcmotor_from_object(pos_args[0]);
 
     // If no arguments given, return existing values
     if (max_voltage_in == mp_const_none) {

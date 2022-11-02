@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 /**
- * @addtogroup Utility Utility Functions
+ * @addtogroup Utility pbio/util: Utility Functions
  *
  * Miscellaneous helper functions.
  *
@@ -102,8 +102,32 @@ void pbio_set_uint32_le(uint8_t *buf, uint32_t value) {
     buf[3] = value >> 24;
 }
 
+#ifndef DOXYGEN
+static inline
+#endif
+/**
+ * Packs 32-bit big endian value into buffer.
+ *
+ * @param [in]  buf     The buffer.
+ * @param [in]  value   The value.
+ */
+void pbio_set_uint32_be(uint8_t *buf, uint32_t value) {
+    buf[0] = value >> 24;
+    buf[1] = value >> 16;
+    buf[2] = value >> 8;
+    buf[3] = value;
+}
+
 bool pbio_uuid128_reverse_compare(const uint8_t *uuid1, const uint8_t *uuid2);
 void pbio_uuid128_reverse_copy(uint8_t *dst, const uint8_t *src);
+
+/**
+ * Declares a new oneshot state variable.
+ * @param [in]  name    The name of the variable.
+ */
+#define PBIO_ONESHOT(name) bool name = false
+
+bool pbio_oneshot(bool value, bool *state);
 
 #endif // _PBIO_UTIL_H_
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 /**
- * @addtogroup Error Error handling
+ * @addtogroup Error pbio/error: Error handling
  * @{
  */
 
@@ -16,8 +16,7 @@
 typedef enum {
     PBIO_SUCCESS,               /**< No error */
     PBIO_ERROR_FAILED,          /**< Unspecified error (used when no other error code fits) */
-    PBIO_ERROR_INVALID_ARG,     /**< Invalid argument (other than port) */
-    PBIO_ERROR_INVALID_PORT,    /**< Invalid port identifier (special case of ::PBIO_ERROR_INVALID_ARG) */
+    PBIO_ERROR_INVALID_ARG,     /**< Invalid argument */
     PBIO_ERROR_IO,              /**< General I/O error */
     PBIO_ERROR_BUSY,            /**< Device or resource is busy */
     PBIO_ERROR_NO_DEV,          /**< Device is not connected */

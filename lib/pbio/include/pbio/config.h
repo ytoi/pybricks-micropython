@@ -11,13 +11,11 @@
 #define PBIO_CONFIG_ENABLE_SYS (0)
 #endif
 
-#ifndef PBIO_CONFIG_UARTDEV
-#define PBIO_CONFIG_UARTDEV (0)
+// Control loop time
+#ifndef PBIO_CONFIG_CONTROL_LOOP_TIME_MS
+#define PBIO_CONFIG_CONTROL_LOOP_TIME_MS (5)
 #endif
 
-// whether to use a minimized (motor) control algorithm to reduce build size
-#ifndef PBIO_CONFIG_CONTROL_MINIMAL
-#define PBIO_CONFIG_CONTROL_MINIMAL (0)
-#endif
+#define PBIO_CONFIG_NUM_DRIVEBASES (PBDRV_CONFIG_NUM_MOTOR_CONTROLLER / 2)
 
 #endif // _PBIO_CONFIG_H_

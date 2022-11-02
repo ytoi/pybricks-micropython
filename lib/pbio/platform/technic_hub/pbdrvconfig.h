@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2020 The Pybricks Authors
-
-#ifndef _PBDRVCONFIG_H_
-#define _PBDRVCONFIG_H_
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 #define PBDRV_CONFIG_ADC                            (1)
 #define PBDRV_CONFIG_ADC_STM32_HAL                  (1)
@@ -39,6 +36,8 @@
 
 #define PBDRV_CONFIG_COUNTER                        (1)
 #define PBDRV_CONFIG_COUNTER_NUM_DEV                (4)
+#define PBDRV_CONFIG_COUNTER_LPF2                   (1)
+#define PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV           (4)
 
 #define PBDRV_CONFIG_GPIO                           (1)
 #define PBDRV_CONFIG_GPIO_STM32L4                   (1)
@@ -54,7 +53,9 @@
 #define PBDRV_CONFIG_LED_PWM                        (1)
 #define PBDRV_CONFIG_LED_PWM_NUM_DEV                (1)
 
-#define PBDRV_CONFIG_MOTOR                          (1)
+#define PBDRV_CONFIG_MOTOR_DRIVER                   (1)
+#define PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV           (4)
+#define PBDRV_CONFIG_MOTOR_DRIVER_HBRIDGE_PWM       (1)
 
 #define PBDRV_CONFIG_PWM                            (1)
 #define PBDRV_CONFIG_PWM_NUM_DEV                    (4)
@@ -83,5 +84,3 @@
 #define PBDRV_CONFIG_NUM_MOTOR_CONTROLLER   (4)
 
 #define PBDRV_CONFIG_SYS_CLOCK_RATE 80000000
-
-#endif // _PBDRVCONFIG_H_

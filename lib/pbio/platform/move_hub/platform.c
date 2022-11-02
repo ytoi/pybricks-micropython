@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 #include <string.h>
 
@@ -8,9 +8,11 @@
 #include <pbio/uartdev.h>
 
 #include "../../drv/button/button_gpio.h"
+#include "../../drv/counter/counter_lpf2.h"
 #include "../../drv/counter/counter_stm32f0_gpio_quad_enc.h"
 #include "../../drv/ioport/ioport_lpf2.h"
 #include "../../drv/led/led_pwm.h"
+#include "../../drv/motor_driver/motor_driver_hbridge_pwm.h"
 #include "../../drv/pwm/pwm_stm32_tim.h"
 #include "../../drv/uart/uart_stm32f0.h"
 
@@ -66,6 +68,17 @@ const pbdrv_counter_stm32f0_gpio_quad_enc_platform_data_t
     },
 };
 
+const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV] = {
+    [0] = {
+        .counter_id = COUNTER_PORT_C,
+        .port_id = PBIO_PORT_ID_C,
+    },
+    [1] = {
+        .counter_id = COUNTER_PORT_D,
+        .port_id = PBIO_PORT_ID_D,
+    },
+};
+
 // I/O ports
 
 const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
@@ -94,8 +107,23 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
 
 // LED
 
+// The constants below are derived from the SunLED XZM2CRKM2DGFBB45SCCB
+// datasheet parameters. This is probably the LED used on the Move hub and
+// City hub (looks like it anyway). The red brightness factor is multiplied by
+// 0.35 compared to the datasheet since it has different resistor value that
+// affects the brightness.
+static const pbdrv_led_pwm_platform_color_t pbdrv_led_pwm_color = {
+    .r_factor = 1000,
+    .g_factor = 270,
+    .b_factor = 200,
+    .r_brightness = 174,
+    .g_brightness = 1590,
+    .b_brightness = 327,
+};
+
 const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED_PWM_NUM_DEV] = {
     {
+        .color = &pbdrv_led_pwm_color,
         .id = LED_DEV_0,
         .r_id = PWM_DEV_3,
         .r_ch = 1,
@@ -107,20 +135,74 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
     }
 };
 
+// Motor driver
+
+const pbdrv_motor_driver_hbridge_pwm_platform_data_t
+    pbdrv_motor_driver_hbridge_pwm_platform_data[PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV] = {
+    // Port A
+    {
+        .pin1_gpio.bank = GPIOA,
+        .pin1_gpio.pin = 8,
+        .pin1_alt = 2,
+        .pin1_pwm_id = PWM_DEV_0,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOA,
+        .pin2_gpio.pin = 10,
+        .pin2_alt = 2,
+        .pin2_pwm_id = PWM_DEV_0,
+        .pin2_pwm_ch = 3,
+    },
+    // Port B
+    {
+        .pin1_gpio.bank = GPIOA,
+        .pin1_gpio.pin = 9,
+        .pin1_alt = 2,
+        .pin1_pwm_id = PWM_DEV_0,
+        .pin1_pwm_ch = 2,
+        .pin2_gpio.bank = GPIOA,
+        .pin2_gpio.pin = 11,
+        .pin2_alt = 2,
+        .pin2_pwm_id = PWM_DEV_0,
+        .pin2_pwm_ch = 4,
+    },
+    // Port C
+    {
+        .pin1_gpio.bank = GPIOC,
+        .pin1_gpio.pin = 8,
+        .pin1_alt = 0,
+        .pin1_pwm_id = PWM_DEV_1,
+        .pin1_pwm_ch = 3,
+        .pin2_gpio.bank = GPIOC,
+        .pin2_gpio.pin = 6,
+        .pin2_alt = 0,
+        .pin2_pwm_id = PWM_DEV_1,
+        .pin2_pwm_ch = 1,
+    },
+    // Port D
+    {
+        .pin1_gpio.bank = GPIOC,
+        .pin1_gpio.pin = 7,
+        .pin1_alt = 0,
+        .pin1_pwm_id = PWM_DEV_1,
+        .pin1_pwm_ch = 2,
+        .pin2_gpio.bank = GPIOC,
+        .pin2_gpio.pin = 9,
+        .pin2_alt = 0,
+        .pin2_pwm_id = PWM_DEV_1,
+        .pin2_pwm_ch = 4,
+    },
+};
+
 // PWM
 
 static void pwm_dev_0_platform_init(void) {
     // port A: PA8, PA10 - port B: PA9, PA11
-    for (pbdrv_gpio_t gpio = { .bank = GPIOA, .pin = 8 }; gpio.pin <= 11; gpio.pin++) {
-        pbdrv_gpio_alt(&gpio, 2);
-    }
+    // pin mux handled by motor driver
 }
 
 static void pwm_dev_1_platform_init(void) {
     // port C: PC6, PC8 - port D: PC7, PC9
-    for (pbdrv_gpio_t gpio = { .bank = GPIOC, .pin = 6 }; gpio.pin <= 9; gpio.pin++) {
-        pbdrv_gpio_alt(&gpio, 0);
-    }
+    // pin mux handled by motor driver
 }
 
 static void pwm_dev_2_platform_init(void) {
@@ -152,8 +234,10 @@ const pbdrv_pwm_stm32_tim_platform_data_t
         .period = 1000, // 12 MHz divided by 1k makes 12 kHz PWM
         .id = PWM_DEV_0,
         // channel 1/3: Port A motor driver; channel 2/4: Port B motor driver
-        .channels = PBDRV_PWM_STM32_TIM_CHANNEL_1_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_2_ENABLE
-            | PBDRV_PWM_STM32_TIM_CHANNEL_3_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_4_ENABLE,
+        .channels = PBDRV_PWM_STM32_TIM_CHANNEL_1_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_1_INVERT
+            | PBDRV_PWM_STM32_TIM_CHANNEL_2_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_2_INVERT
+            | PBDRV_PWM_STM32_TIM_CHANNEL_3_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_3_INVERT
+            | PBDRV_PWM_STM32_TIM_CHANNEL_4_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_4_INVERT,
     },
     {
         .platform_init = pwm_dev_1_platform_init,
@@ -162,8 +246,10 @@ const pbdrv_pwm_stm32_tim_platform_data_t
         .period = 1000, // 12 MHz divided by 1k makes 12 kHz PWM
         .id = PWM_DEV_1,
         // channel 1/3: Port C motor driver; channel 3/4: Port D motor driver
-        .channels = PBDRV_PWM_STM32_TIM_CHANNEL_1_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_2_ENABLE
-            | PBDRV_PWM_STM32_TIM_CHANNEL_3_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_4_ENABLE,
+        .channels = PBDRV_PWM_STM32_TIM_CHANNEL_1_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_1_INVERT
+            | PBDRV_PWM_STM32_TIM_CHANNEL_2_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_2_INVERT
+            | PBDRV_PWM_STM32_TIM_CHANNEL_3_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_3_INVERT
+            | PBDRV_PWM_STM32_TIM_CHANNEL_4_ENABLE | PBDRV_PWM_STM32_TIM_CHANNEL_4_INVERT,
     },
     {
         .platform_init = pwm_dev_2_platform_init,
@@ -215,13 +301,12 @@ void USART3_4_IRQHandler(void) {
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDEV_NUM_DEV] = {
     [0] = {
         .uart_id = UART_ID_0,
-        .counter_id = COUNTER_PORT_C,
     },
     [1] = {
         .uart_id = UART_ID_1,
-        .counter_id = COUNTER_PORT_D,
     },
 };
+
 #endif // PBIO_CONFIG_UARTDEV
 
 // special memory addresses defined in linker script

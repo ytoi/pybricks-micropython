@@ -17,6 +17,7 @@
 #include <glib.h>
 #include <grx-3.0.h>
 
+#include <pbio/dcmotor.h>
 #include <pbio/color.h>
 #include <pbio/config.h>
 #include <pbio/control.h>
@@ -36,7 +37,7 @@ static pthread_t task_caller_thread;
 static void *task_caller(void *arg) {
     struct timespec ts;
     ts.tv_sec = 0;
-    ts.tv_nsec = PBIO_CONTROL_LOOP_TIME_MS * 1000000;
+    ts.tv_nsec = PBIO_CONFIG_CONTROL_LOOP_TIME_MS * 1000000;
 
     while (!stopping_thread) {
         MP_THREAD_GIL_ENTER();
@@ -111,8 +112,7 @@ void pybricks_deinit(void) {
 }
 
 void pybricks_unhandled_exception(void) {
-    extern void pbio_motor_process_reset();
-    pbio_motor_process_reset();
+    pbio_dcmotor_stop_all(false);
     extern void _pb_ev3dev_speaker_beep_off(void);
     _pb_ev3dev_speaker_beep_off();
 }

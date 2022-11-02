@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2013, 2014 Damien P. George
-# Copyright (c) 2019-2020 The Pybricks Authors
+# Copyright (c) 2019-2022 The Pybricks Authors
 
 PBIO_PLATFORM = nxt
 
@@ -40,7 +40,6 @@ QSTR_GLOBAL_DEPENDENCIES =
 MICROPY_ROM_TEXT_COMPRESSION ?= 1
 
 MPY_CROSS = ../../micropython/mpy-cross/mpy-cross
-MPY_CROSS_FLAGS += -mno-unicode
 
 # include py core make definitions
 include $(TOP)/py/py.mk
@@ -68,9 +67,11 @@ INC += -I$(BUILD)
 COPT += -DFIXMATH_NO_CTYPE
 
 CFLAGS_MCU = -mthumb -mtune=arm7tdmi -mcpu=arm7tdmi -msoft-float
-CFLAGS = $(INC) -Wall -Werror -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU) $(COPT) $(CFLAGS_EXTRA)
+CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-maybe-uninitialized
+CFLAGS = $(INC) -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU) $(CFLAGS_WARN) $(COPT) $(CFLAGS_EXTRA)
 LDSCRIPT = $(PBIO_PLATFORM).ld
 LDFLAGS = -nostdlib -T $(LDSCRIPT) -Map=$@.map --cref --gc-sections
+$(BUILD)/nxt-firmware-drivers/%.o: CFLAGS += -Wno-sign-compare
 
 # avoid doubles
 CFLAGS += -fsingle-precision-constant -Wdouble-promotion
@@ -143,6 +144,7 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	common/pb_type_battery.c \
 	common/pb_type_control.c \
 	common/pb_type_dcmotor.c \
+	common/pb_type_keypad.c \
 	common/pb_type_logger.c \
 	common/pb_type_motor.c \
 	common/pb_type_system.c \
@@ -174,6 +176,7 @@ PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
 	tools/pb_type_stopwatch.c \
 	util_mp/pb_obj_helper.c \
 	util_mp/pb_type_enum.c \
+	util_pb/pb_device_stm32.c \
 	util_pb/pb_error.c \
 	)
 
@@ -192,32 +195,36 @@ LIBFIXMATH_SRC_C = $(addprefix lib/libfixmath/libfixmath/,\
 	)
 
 PBIO_SRC_C = $(addprefix lib/pbio/,\
-	drv/$(PBIO_PLATFORM)/motor.c \
 	drv/battery/battery_nxt.c \
 	drv/button/button_nxt.c \
 	drv/clock/clock_nxt.c \
 	drv/core.c \
 	drv/counter/counter_core.c \
 	drv/counter/counter_nxt.c \
+	drv/ioport/ioport_nxt.c \
+	drv/motor_driver/motor_driver_nxt.c \
 	drv/reset/reset_nxt.c \
-	platform/motors/settings.c \
 	platform/$(PBIO_PLATFORM)/platform.c \
 	platform/$(PBIO_PLATFORM)/sys.c \
+	src/angle.c \
 	src/battery.c \
 	src/color/conversion.c \
 	src/control.c \
+	src/control_settings.c \
 	src/dcmotor.c \
 	src/drivebase.c \
 	src/error.c \
+	src/iodev.c \
 	src/integrator.c \
 	src/logger.c \
 	src/main.c \
 	src/math.c \
 	src/motor_process.c \
+	src/motor/servo_settings.c \
 	src/observer.c \
+	src/parent.c \
 	src/servo.c \
 	src/tacho.c \
-	src/trajectory_ext.c \
 	src/trajectory.c \
 	sys/battery.c \
 	sys/command.c \
@@ -250,14 +257,14 @@ SRC_QSTR += $(SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
 # Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
-all: $(BUILD)/firmware.bin
+all: $(BUILD)/firmware-base.bin
 
 $(BUILD)/firmware.elf: $(LDSCRIPT) $(OBJ)
 	$(ECHO) "LINK $@"
 	$(Q)$(LD) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 
 # firmware blob with main.mpy - can be flashed to hub
-$(BUILD)/firmware.bin: $(BUILD)/firmware.elf
+$(BUILD)/firmware-base.bin: $(BUILD)/firmware.elf
 	$(ECHO) "BIN creating firmware file"
 	$(Q)$(OBJCOPY) -O binary -j .isr_vector -j .text -j .data -j .name -j .user $^ $@
 	$(ECHO) "`wc -c < $@` bytes"

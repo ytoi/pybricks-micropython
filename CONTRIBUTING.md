@@ -6,10 +6,10 @@ This is the recommended development environment used by the Pybricks maintainers
 
 ### Requirements
 
-- Ubuntu 20.04 (Focal Fossa)
+- Ubuntu 22.04 (Jammy Jellyfish)
 - [Git SCM][git] any recent-ish version
 - [VS Code][vscode] latest version
-- [Python][python] v3.8.x
+- [Python][python] v3.10.x
 - [Poetry][poetry] v1.x
 - [Uncrustify][uncrustify] v0.71.x
 - [GNU ARM Embedded Toolchain][arm-gcc] v10-2020-q4
@@ -45,7 +45,7 @@ like Poetry.
 
 Linux (Ubuntu):
 
-    sudo apt update && sudo apt install python-pipx
+    sudo apt update && sudo apt install pipx
 
 macOS:
 
@@ -96,6 +96,11 @@ $env:PATH="C:\cygwin64\bin;C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 
 
 [cygwin]: https://www.cygwin.com/
 
+#### macOS
+
+    brew install uncrustify
+    brew instal libusb
+    brew install --cask gcc-arm-embedded
 
 ### Get the code
 
@@ -140,11 +145,11 @@ source code, then run:
 
     poetry env info
 
-Verify that the Python version listed is 3.8.x. If it is not, run:
+Verify that the Python version listed is 3.10.x. If it is not, run:
 
-    poetry env use <path-to-python3.8>
+    poetry env use <path-to-python3.10>
 
-where `<path-to-python3.8>` is the full path to the Python 3.8 installation.
+where `<path-to-python3.10>` is the full path to the Python 3.10 installation.
 
 Then run the following to set up the Python environment:
 
@@ -157,15 +162,6 @@ To activate the environment, run:
 The command prompt will now start with `(.venv)` to remind you that you are
 working in the virtual environment. You should run `poetry shell` any time you
 open a new terminal window while working on `pybricks-micropython`.
-
-
-### Set up VS Code
-
-When using the Microsoft C/C++ extension for VS Code, you will need to set the
-`GCC_10_ARM_NONE_EABI_BIN` environment variable to the directory where the Arm
-toolchain was installed so that it can find the compiler to assist with code
-analysis. See [.vscode/c_cpp_properties.json](.vscode/c_cpp_properties.json)
-for more info.
 
 
 Building the code
@@ -301,3 +297,24 @@ Then in the `pybricks-micropython` directory:
     yarn build:debug
 
 [wasm]: https://webassembly.org/
+
+Build and deploy firmware
+-------------------------
+
+### Build the firmware
+
+Pick your Hub from the `bricks` sub-directory you want to compile.
+
+    poetry shell
+    make mpy-cross -j8
+    make -C bricks/primehub -j8
+
+### Deploy the firmware to a hub
+
+1. Follow the guide to prepare your Hub for Pybricks firmware installation:
+   1. https://pybricks.com/install, or
+   2. https://dfu.pybricks.com for Spike Prime or Mindstorms Inventor
+2. Execute the deployment:
+    ```shell
+    make -C bricks/primehub -j8 deploy
+    ```

@@ -4,6 +4,88 @@
 
 ## [Unreleased]
 
+### Fixed
+- Fix integral control not working properly due to mistakes introduced while
+  converting the controllers to use millidegrees.
+
+### Changed
+- `Motor.run_time` no longer raises an exception for negative time values.
+  Negative times are now treated as zero, thus producing a stationary
+  trajectory.
+
+## [3.2.0b2] - 2022-07-06
+
+### Added
+- Added `Motor.stalled()`. It can detect stall during speed and position
+  control (`run`, `run_angle`, ...) just like `Motor.control.stalled()`, but
+  it also detects stall for `dc()` command when the user controls the voltage
+  directly.
+
+### Fixed
+- Fixed motor not stopping at the end of `run_until_stalled` ([support#662]).
+- Fixed incorrect battery current reading on Technic hub ([support#665]).
+- When the motor was pushed backwards while stalled, the `control.stalled()`
+  was inadvertently cleared because a nonzero speed was detected. This is fixed
+  by checking the intended direction as well.
+- Fixed I/O devices not syncing at high baud rate.
+- Fixed `ENODEV` error while device connection manager is busy ([support#674]).
+
+### Changed
+- Reworked internal motor model that is used to estimate speed. This results
+  in better speed estimation at low speeds, which makes PID control smoother.
+- The `Motor.speed()` method and `DriveBase` equivalents now provide the
+  estimated speed instead of the value reported by the motor. This is generally
+  more responsive.
+- Overhauled the control code to make it smaller and more numerically robust
+  while using higher position resolution where it is available.
+- Changed drive base default speed to go a little slower.
+- Updated MicroPython to v1.19.
+
+[support#662]: https://github.com/pybricks/support/issues/662
+[support#665]: https://github.com/pybricks/support/issues/665
+[support#674]: https://github.com/pybricks/support/issues/674
+
+## [3.2.0b1] - 2022-06-03
+
+### Added
+- Added `Stop.NONE` as `then` option for motors. This allows subsequent
+  motor and drive base commands to transition without stopping.
+- Added `Stop.COAST_SMART` as `then` option for motors. This still coasts the
+  motor, but it keeps track of the previously used position target. When a new
+  relative angle command is given (e.g. rotate 90 degrees), it uses that
+  position as the starting point. This avoids accumulation of errors when using
+  relative angles in succession.
+- Made motor deceleration configurable separately from acceleration.
+- Enabled `ujson` module.
+- Added ability to use more than one `DriveBase` in the same script.
+- Added support for battery charging on Prime and essential hubs.
+
+### Changed
+- Changed how `DriveBases` and `Motor` classes can be used together.
+  Previously, an individual motor could not be used when a drive base used it.
+  From now on, devices can always be used. If they were already in use by
+  something else, that other class will just be stopped (coast).
+- Changed how unexpected motor problems are handled, such as a cable being
+  unplugged while it was running. Previously, this raised a `SystemExit` no
+  matter which motor was unplugged. Now it will return an `OSError` with
+  `ENODEV`, which is consistent with trying to initialize a motor that isn't
+  there. The `Motor` class must be initialized again to use the motor again.
+- Changing settings while a motor is moving no longer raises an exception. Some
+  settings will not take effect until a new motor command is given.
+- Disabled `Motor.control` and `Motor.log` on Move Hub to save space.
+- Changed LED color calibration on Prime hub to make yellow less green.
+- Updated to upstream MicroPython v1.18.
+- Changed imu.acceleration() units to mm/s/s ([pybricks-micropython#88]) for
+  Move Hub, Technic Hub, and Prime Hub.
+
+### Fixed
+- Fixed color calibration on Powered Up remote control ([support#424]).
+- Fixed 3x3 Light Matrix colors with hue > 255 not working correctly ([support#619]).
+
+[pybricks-micropython#88]: https://github.com/pybricks/pybricks-micropython/issues/88
+[support#424]: https://github.com/pybricks/support/issues/424
+[support#619]: https://github.com/pybricks/support/issues/619
+
 ## [3.1.0] - 2021-12-16
 
 ### Changed
@@ -200,7 +282,9 @@ Prerelease changes are documented at [support#48].
 
 
 <!-- diff links for headers -->
-[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b2...HEAD
+[3.2.0b2]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b1...v3.2.0b2
+[3.2.0b1]: https://github.com/pybricks/pybricks-micropython/compare/v3.1.0...v3.2.0b1
 [3.1.0]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0c1...v3.1.0
 [3.1.0c1]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0a4...v3.1.0c1
 [3.1.0b1]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0a4...v3.1.0b1

@@ -20,6 +20,7 @@ codeformat.PATHS = [
     "pybricks/**/*.[ch]",
     # Python
     "bricks/**/*.py",
+    "lib/pbio/cpython/**/*.py",
     "tests/**/*.py",
     "tools/**/*.py",
 ]
@@ -28,6 +29,7 @@ codeformat.EXCLUSIONS = [
     "bricks/nxt/nxt-firmware-drivers/**",
     "bricks/**/build*/**",
     "micropython/**",
+    "tests/**/build/**",
 ]
 
 codeformat.TOP = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

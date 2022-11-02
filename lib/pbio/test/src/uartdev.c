@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 #include <assert.h>
 #include <stdbool.h>
@@ -12,7 +12,6 @@
 #include <tinytest.h>
 #include <tinytest_macros.h>
 
-#include <pbdrv/counter.h>
 #include <pbdrv/uart.h>
 #include <pbio/iodev.h>
 #include <pbio/main.h>
@@ -24,8 +23,8 @@
 
 // TODO: submit this upstream
 #ifndef tt_want_float_op
-#define tt_want_float_op(a,op,b) \
-    tt_assert_test_type(a,b,#a " "#op " "#b,float,(val1_ op val2_),"%f",(void)0)
+#define tt_want_float_op(a, op, b) \
+    tt_assert_test_type(a, b,#a " "#op " "#b, float, (val1_ op val2_), "%f", (void)0)
 #endif
 
 static struct {
@@ -45,10 +44,10 @@ PT_THREAD(simulate_rx_msg(struct pt *pt, const uint8_t *msg, uint8_t length, boo
     PT_BEGIN(pt);
 
     // First uartdev reads one byte header
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.rx_msg_result == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(test_uart_dev.rx_msg_length, ==, 1);
     memcpy(test_uart_dev.rx_msg, msg, 1);
     test_uart_dev.rx_msg_result = PBIO_SUCCESS;
@@ -60,10 +59,10 @@ PT_THREAD(simulate_rx_msg(struct pt *pt, const uint8_t *msg, uint8_t length, boo
     }
 
     // then read rest of message
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.rx_msg_result == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(test_uart_dev.rx_msg_length, ==, length - 1);
     memcpy(test_uart_dev.rx_msg, &msg[1], length - 1);
     test_uart_dev.rx_msg_result = PBIO_SUCCESS;
@@ -80,10 +79,10 @@ end:
 PT_THREAD(simulate_tx_msg(struct pt *pt, const uint8_t *msg, uint8_t length, bool *ok)) {
     PT_BEGIN(pt);
 
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.tx_msg_result == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(test_uart_dev.tx_msg_length, ==, length);
 
     for (int i = 0; i < length; i++) {
@@ -222,19 +221,20 @@ static PT_THREAD(test_boost_color_distance_sensor(struct pt *pt)) {
     PT_BEGIN(pt);
 
     process_start(&pbio_uartdev_process);
+    pbio_uartdev_ready(0);
 
     // starting baud rate of hub
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 115200;
-    });
+    }));
 
     // this device does not support syncing at 115200
     SIMULATE_TX_MSG(msg_speed_115200);
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 2400;
-    });
+    }));
 
     // send BOOST Color and Distance sensor info
     SIMULATE_RX_MSG(msg0);
@@ -325,19 +325,12 @@ static PT_THREAD(test_boost_color_distance_sensor(struct pt *pt)) {
     SIMULATE_TX_MSG(msg83);
 
     // wait for baud rate change
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 115200;
-    });
+    }));
 
     PT_YIELD(pt);
-
-    pbdrv_counter_dev_t *counter;
-    tt_want_uint_op(pbdrv_counter_get_dev(0, &counter), ==, PBIO_SUCCESS);
-    int32_t count;
-    tt_want_uint_op(pbdrv_counter_get_count(counter, &count), ==, PBIO_ERROR_NO_DEV);
-    tt_want_uint_op(pbdrv_counter_get_abs_count(counter, &count), ==, PBIO_ERROR_NO_DEV);
-    tt_want_uint_op(pbdrv_counter_get_rate(counter, &count), ==, PBIO_ERROR_NO_DEV);
 
     // should be synced now are receive regular pings
     static int i;
@@ -355,7 +348,6 @@ static PT_THREAD(test_boost_color_distance_sensor(struct pt *pt)) {
     tt_want_uint_op(iodev->info->type_id, ==, PBIO_IODEV_TYPE_ID_COLOR_DIST_SENSOR);
     tt_want_uint_op(iodev->info->num_modes, ==, 11);
     // TODO: verify fw/hw versions
-    tt_want_uint_op(iodev->info->mode_combos, ==, 1 << 6 | 1 << 3 | 1 << 2 | 1 << 1 | 1 << 0);
     tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_NONE);
     tt_want_uint_op(iodev->mode, ==, 0);
 
@@ -398,10 +390,10 @@ static PT_THREAD(test_boost_color_distance_sensor(struct pt *pt)) {
     // static struct etimer timer;
     int err;
 
-    PT_WAIT_WHILE(pt, {
+    PT_WAIT_WHILE(pt, ({
         pbio_test_clock_tick(1);
         (err = pbio_iodev_set_mode_begin(iodev, 1)) == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(err, ==, PBIO_SUCCESS);
 
     // wait for mode change message to be sent
@@ -414,20 +406,20 @@ static PT_THREAD(test_boost_color_distance_sensor(struct pt *pt)) {
     // data message with new mode
     SIMULATE_RX_MSG(msg88);
 
-    PT_WAIT_WHILE(pt, {
+    PT_WAIT_WHILE(pt, ({
         pbio_test_clock_tick(1);
         (err = pbio_iodev_set_mode_end(iodev)) == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(err, ==, PBIO_SUCCESS);
     tt_uint_op(iodev->mode, ==, 1);
 
 
     // also do mode 8 since it requires the extended mode flag
 
-    PT_WAIT_WHILE(pt, {
+    PT_WAIT_WHILE(pt, ({
         pbio_test_clock_tick(1);
         (err = pbio_iodev_set_mode_begin(iodev, 8)) == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(err, ==, PBIO_SUCCESS);
 
     // wait for mode change message to be sent
@@ -441,10 +433,10 @@ static PT_THREAD(test_boost_color_distance_sensor(struct pt *pt)) {
     SIMULATE_RX_MSG(msg90);
     SIMULATE_RX_MSG(msg91);
 
-    PT_WAIT_WHILE(pt, {
+    PT_WAIT_WHILE(pt, ({
         pbio_test_clock_tick(1);
         (err = pbio_iodev_set_mode_end(iodev)) == PBIO_ERROR_AGAIN;
-    });
+    }));
     tt_uint_op(err, ==, PBIO_SUCCESS);
     tt_uint_op(iodev->mode, ==, 8);
 
@@ -495,9 +487,7 @@ static PT_THREAD(test_boost_interactive_motor(struct pt *pt)) {
 
     static const uint8_t msg34[] = { 0x04 }; // ACK
 
-    static const uint8_t msg35[] = { 0x54, 0x22, 0x00, 0x10, 0x20, 0xB9 }; // WRITE mode combo
-
-    static const uint8_t msg36[] = { 0xD8, 0x9C, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xBB }; // DATA speed and position combo
+    static const uint8_t msg36[] = { 0xD0, 0xFF, 0xFF, 0xFF, 0xFF, 0x2F }; // DATA length 4, mode 0
 
     static const uint8_t msg37[] = { 0x02 }; // NACK
 
@@ -508,21 +498,22 @@ static PT_THREAD(test_boost_interactive_motor(struct pt *pt)) {
     PT_BEGIN(pt);
 
     process_start(&pbio_uartdev_process);
+    pbio_uartdev_ready(0);
 
     // starting baud rate of hub
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 115200;
-    });
+    }));
 
     // this device does not support syncing at 115200
     SIMULATE_TX_MSG(msg_speed_115200);
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 2400;
-    });
+    }));
 
-    // send BOOST Color and Distance sensor info
+    // send BOOST Interactive Motor info
     SIMULATE_RX_MSG(msg0);
     SIMULATE_RX_MSG(msg1);
     SIMULATE_RX_MSG(msg2);
@@ -562,28 +553,12 @@ static PT_THREAD(test_boost_interactive_motor(struct pt *pt)) {
     SIMULATE_TX_MSG(msg34);
 
     // wait for baud rate change
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 115200;
-    });
-
-    // motors get WRITE message to setup mode combos
-    SIMULATE_TX_MSG(msg35);
-
-    // same message is received in respose along with data message
-    SIMULATE_RX_MSG(msg35);
-    SIMULATE_RX_MSG(msg36);
+    }));
 
     PT_YIELD(pt);
-
-    pbdrv_counter_dev_t *counter;
-    tt_want_uint_op(pbdrv_counter_get_dev(0, &counter), ==, PBIO_SUCCESS);
-    int32_t count;
-    tt_want_uint_op(pbdrv_counter_get_count(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, -1);
-    tt_want_uint_op(pbdrv_counter_get_abs_count(counter, &count), ==, PBIO_ERROR_NOT_SUPPORTED);
-    tt_want_uint_op(pbdrv_counter_get_rate(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, -1400);
 
     // should be synced now are receive regular pings
     static int i;
@@ -600,8 +575,7 @@ static PT_THREAD(test_boost_interactive_motor(struct pt *pt)) {
     tt_want_uint_op(iodev->info->type_id, ==, PBIO_IODEV_TYPE_ID_INTERACTIVE_MOTOR);
     tt_want_uint_op(iodev->info->num_modes, ==, 4);
     // TODO: verify fw/hw versions
-    tt_want_uint_op(iodev->info->mode_combos, ==, 1 << 2 | 1 << 1);
-    tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR |
+    tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT |
         PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_SPEED | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_REL_POS);
     tt_want_uint_op(iodev->mode, ==, 0);
 
@@ -683,9 +657,7 @@ static PT_THREAD(test_technic_large_motor(struct pt *pt)) {
 
     static const uint8_t msg55[] = { 0x04 }; // ACK
 
-    static const uint8_t msg56[] = { 0x5C, 0x23, 0x00, 0x10, 0x20, 0x30, 0x00, 0x00, 0x00, 0x80 }; // WRITE mode combo
-
-    static const uint8_t msg57[] = { 0xD8, 0x64, 0xFF, 0xFF, 0xFF, 0xFF, 0x17, 0x00, 0x00, 0x54 }; // DATA speed and position combo
+    static const uint8_t msg57[] = { 0xD0, 0xFF, 0xFF, 0xFF, 0xFF, 0x2F }; // DATA length 4, mode 0
 
     static const uint8_t msg58[] = { 0x02 }; // NACK
 
@@ -696,18 +668,19 @@ static PT_THREAD(test_technic_large_motor(struct pt *pt)) {
     PT_BEGIN(pt);
 
     process_start(&pbio_uartdev_process);
+    pbio_uartdev_ready(0);
 
     // baud rate for sync messages
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 115200;
-    });
+    }));
 
     // this device supports syncing at 115200
     SIMULATE_TX_MSG(msg_speed_115200);
     SIMULATE_RX_MSG(msg_ack);
 
-    // send BOOST Color and Distance sensor info
+    // send Technic Large Motor info
     SIMULATE_RX_MSG(msg2);
     SIMULATE_RX_MSG(msg3);
     SIMULATE_RX_MSG(msg4);
@@ -768,24 +741,7 @@ static PT_THREAD(test_technic_large_motor(struct pt *pt)) {
     // wait for ACK
     SIMULATE_TX_MSG(msg55);
 
-    // motors get WRITE message to setup mode combos
-    SIMULATE_TX_MSG(msg56);
-
-    // same message is received in respose along with data message
-    SIMULATE_RX_MSG(msg56);
-    SIMULATE_RX_MSG(msg57);
-
     PT_YIELD(pt);
-
-    pbdrv_counter_dev_t *counter;
-    tt_want_uint_op(pbdrv_counter_get_dev(0, &counter), ==, PBIO_SUCCESS);
-    int32_t count;
-    tt_want_uint_op(pbdrv_counter_get_count(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, -1);
-    tt_want_uint_op(pbdrv_counter_get_abs_count(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, 23);
-    tt_want_uint_op(pbdrv_counter_get_rate(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, 1470);
 
     // should be synced now are receive regular pings
     static int i;
@@ -802,8 +758,7 @@ static PT_THREAD(test_technic_large_motor(struct pt *pt)) {
     tt_want_uint_op(iodev->info->type_id, ==, PBIO_IODEV_TYPE_ID_TECHNIC_L_MOTOR);
     tt_want_uint_op(iodev->info->num_modes, ==, 6);
     // TODO: verify fw/hw versions
-    tt_want_uint_op(iodev->info->mode_combos, ==, 1 << 3 | 1 << 2 | 1 << 1);
-    tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_SPEED
+    tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_SPEED
         | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_REL_POS | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_ABS_POS);
     tt_want_uint_op(iodev->mode, ==, 0);
 
@@ -891,9 +846,7 @@ static PT_THREAD(test_technic_xl_motor(struct pt *pt)) {
 
     static const uint8_t msg55[] = { 0x04 }; // ACK
 
-    static const uint8_t msg56[] = { 0x5C, 0x23, 0x00, 0x10, 0x20, 0x30, 0x00, 0x00, 0x00, 0x80 }; // WRITE mode combo
-
-    static const uint8_t msg57[] = { 0xD8, 0x64, 0xFF, 0xFF, 0xFF, 0xFF, 0x41, 0x00, 0x00, 0x02 }; // DATA speed and position combo
+    static const uint8_t msg57[] = { 0xD0, 0xFF, 0xFF, 0xFF, 0xFF, 0x2F }; // DATA length 4, mode 0
 
     static const uint8_t msg58[] = { 0x02 }; // NACK
 
@@ -904,18 +857,19 @@ static PT_THREAD(test_technic_xl_motor(struct pt *pt)) {
     PT_BEGIN(pt);
 
     process_start(&pbio_uartdev_process);
+    pbio_uartdev_ready(0);
 
     // baud rate for sync messages
-    PT_WAIT_UNTIL(pt, {
+    PT_WAIT_UNTIL(pt, ({
         pbio_test_clock_tick(1);
         test_uart_dev.baud == 115200;
-    });
+    }));
 
     // this device supports syncing at 115200
     SIMULATE_TX_MSG(msg_speed_115200);
     SIMULATE_RX_MSG(msg_ack);
 
-    // send BOOST Color and Distance sensor info
+    // send Technic XL Motor info
     SIMULATE_RX_MSG(msg2);
     SIMULATE_RX_MSG(msg3);
     SIMULATE_RX_MSG(msg4);
@@ -976,24 +930,7 @@ static PT_THREAD(test_technic_xl_motor(struct pt *pt)) {
     // wait for ACK
     SIMULATE_TX_MSG(msg55);
 
-    // motors get WRITE message to setup mode combos
-    SIMULATE_TX_MSG(msg56);
-
-    // same message is received in respose along with data message
-    SIMULATE_RX_MSG(msg56);
-    SIMULATE_RX_MSG(msg57);
-
     PT_YIELD(pt);
-
-    pbdrv_counter_dev_t *counter;
-    tt_want_uint_op(pbdrv_counter_get_dev(0, &counter), ==, PBIO_SUCCESS);
-    int32_t count;
-    tt_want_uint_op(pbdrv_counter_get_count(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, -1);
-    tt_want_uint_op(pbdrv_counter_get_abs_count(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, 65);
-    tt_want_uint_op(pbdrv_counter_get_rate(counter, &count), ==, PBIO_SUCCESS);
-    tt_want_int_op(count, ==, 1525);
 
     // should be synced now are receive regular pings
     static int i;
@@ -1010,8 +947,7 @@ static PT_THREAD(test_technic_xl_motor(struct pt *pt)) {
     tt_want_uint_op(iodev->info->type_id, ==, PBIO_IODEV_TYPE_ID_TECHNIC_XL_MOTOR);
     tt_want_uint_op(iodev->info->num_modes, ==, 6);
     // TODO: verify fw/hw versions
-    tt_want_uint_op(iodev->info->mode_combos, ==, 1 << 3 | 1 << 2 | 1 << 1);
-    tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_SPEED
+    tt_want_uint_op(iodev->info->capability_flags, ==, PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_SPEED
         | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_REL_POS | PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_ABS_POS);
     tt_want_uint_op(iodev->mode, ==, 0);
 
@@ -1052,7 +988,6 @@ struct testcase_t pbio_uartdev_tests[] = {
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[] = {
     [0] = {
         .uart_id = 0,
-        .counter_id = 0,
     },
 };
 

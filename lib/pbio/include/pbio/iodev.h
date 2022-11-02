@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
+
+/**
+ * @addtogroup Iodev pbio/iodev: Input and output devices
+ *
+ * Type and mode information for LEGO Powered Up devices.
+ * @{
+ */
 
 #ifndef _PBIO_IODEV_H_
 #define _PBIO_IODEV_H_
@@ -144,6 +151,229 @@ typedef enum {
 } pbio_iodev_type_id_t;
 
 /**
+ * Modes for MINDSTORMS EV3 Touch Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_EV3_TOUCH_SENSOR__TOUCH        = 0,
+};
+
+/**
+ * Modes for MINDSTORMS EV3 Color Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_EV3_COLOR_SENSOR__REFLECT      = 0,
+    PBIO_IODEV_MODE_EV3_COLOR_SENSOR__AMBIENT      = 1,
+    PBIO_IODEV_MODE_EV3_COLOR_SENSOR__COLOR        = 2,
+    PBIO_IODEV_MODE_EV3_COLOR_SENSOR__REF_RAW      = 3,
+    PBIO_IODEV_MODE_EV3_COLOR_SENSOR__RGB_RAW      = 4,
+    PBIO_IODEV_MODE_EV3_COLOR_SENSOR__CAL          = 5,
+};
+
+/**
+ * Modes for MINDSTORMS EV3 Infrared Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_EV3_INFRARED_SENSOR__PROX      = 0,
+    PBIO_IODEV_MODE_EV3_INFRARED_SENSOR__SEEK      = 1,
+    PBIO_IODEV_MODE_EV3_INFRARED_SENSOR__REMOTE    = 2,
+    PBIO_IODEV_MODE_EV3_INFRARED_SENSOR__REM_A     = 3,
+    PBIO_IODEV_MODE_EV3_INFRARED_SENSOR__S_ALT     = 4,
+    PBIO_IODEV_MODE_EV3_INFRARED_SENSOR__CAL       = 5,
+};
+
+/**
+ * Modes for MINDSTORMS EV3 Ultrasonic Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__DIST_CM = 0,
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__DIST_IN = 1,
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__LISTEN  = 2,
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__SI_CM   = 3,
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__SI_IN   = 4,
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__DC_CM   = 5,
+    PBIO_IODEV_MODE_EV3_ULTRASONIC_SENSOR__DC_IN   = 6,
+};
+
+/**
+ * Modes for MINDSTORMS EV3 Gyro Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__ANG           = 0,
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__RATE          = 1,
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__FAS           = 2,
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__G_A           = 3,
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__CAL           = 4,
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__RATE2         = 5,
+    PBIO_IODEV_MODE_EV3_GYRO_SENSOR__ANG2          = 6,
+};
+
+/**
+ * Modes for MINDSTORMS EV3 Analog Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_EV3_ANALOG__RAW                = 0,
+};
+
+/**
+ * Modes for MINDSTORMS NXT Analog Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_NXT_ANALOG__PASSIVE            = 0,
+    PBIO_IODEV_MODE_NXT_ANALOG__ACTIVE             = 1,
+};
+
+/**
+ * Modes for MINDSTORMS NXT Ultrasonic Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_NXT_ULTRASONIC_SENSOR__DIST_CM = 0,
+    PBIO_IODEV_MODE_NXT_ULTRASONIC_SENSOR__DIST_IN = 1,
+    PBIO_IODEV_MODE_NXT_ULTRASONIC_SENSOR__SI_CM   = 2,
+    PBIO_IODEV_MODE_NXT_ULTRASONIC_SENSOR__SI_IN   = 3,
+    PBIO_IODEV_MODE_NXT_ULTRASONIC_SENSOR__LISTEN  = 4,
+};
+
+/**
+ * Modes for MINDSTORMS NXT Light Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_NXT_LIGHT_SENSOR__REFLECT      = 0,
+    PBIO_IODEV_MODE_NXT_LIGHT_SENSOR__AMBIENT      = 1,
+};
+
+/**
+ * Modes for MINDSTORMS NXT Color Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_NXT_COLOR_SENSOR__MEASURE      = 0,
+    PBIO_IODEV_MODE_NXT_COLOR_SENSOR__LAMP_R       = 1,
+    PBIO_IODEV_MODE_NXT_COLOR_SENSOR__LAMP_G       = 2,
+    PBIO_IODEV_MODE_NXT_COLOR_SENSOR__LAMP_B       = 3,
+    PBIO_IODEV_MODE_NXT_COLOR_SENSOR__LAMP_OFF     = 4,
+};
+
+/**
+ * Modes for MINDSTORMS NXT Temperature Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_NXT_TEMPERATURE_SENSOR_CELSIUS = 0,
+};
+
+/**
+ * Modes for MINDSTORMS NXT Energy Meter
+ */
+enum {
+    PBIO_IODEV_MODE_NXT_ENERGY_METER_ALL           = 7,
+};
+
+/**
+ * Modes for POWERED UP WEDO 2.0 Tilt sensor
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_WEDO2_TILT_SENSOR__ANGLE  = 0,  // read 2x int8_t
+    PBIO_IODEV_MODE_PUP_WEDO2_TILT_SENSOR__DIR    = 1,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_WEDO2_TILT_SENSOR__CNT    = 2,  // read 3x int8_t
+    PBIO_IODEV_MODE_PUP_WEDO2_TILT_SENSOR__CAL    = 2,  // read 3x int8_t
+};
+
+/**
+ * Modes for POWERED UP WEDO 2.0 Infrared "Motion" sensor
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_WEDO2_MOTION_SENSOR__DETECT = 0,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_WEDO2_MOTION_SENSOR__COUNT  = 1,  // read 1x int32_t
+    PBIO_IODEV_MODE_PUP_WEDO2_MOTION_SENSOR__CAL    = 2,  // read 3x int16_t
+};
+
+/**
+ * Modes for POWERED UP Color and Distance Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__COLOR = 0,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__PROX  = 1,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__COUNT = 2,  // read 1x int32_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__REFLT = 3,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__AMBI  = 4,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__COL_O = 5,  // writ 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__RGB_I = 6,  // read 3x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__IR_TX = 7,  // writ 1x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__SPEC1 = 8,  // rrwr 4x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__DEBUG = 9,  // ?? 2x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_DISTANCE_SENSOR__CALIB = 10, // ?? 8x int16_t
+};
+
+/**
+ * Modes for SPIKE Color Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__COLOR = 0,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__REFLT = 1,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__AMBI  = 2,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__LIGHT = 3,  // writ 3x int8_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__RREFL = 4,  // read 2x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__RGB_I = 5,  // read 4x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__HSV   = 6,  // read 3x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__SHSV  = 7,  // read 4x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__DEBUG = 8,  // ??   2x int16_t
+    PBIO_IODEV_MODE_PUP_COLOR_SENSOR__CALIB = 9,  // ??   7x int16_t
+};
+
+/**
+ * Modes for SPIKE Ultrasonic Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__DISTL = 0,  // read 1x int16_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__DISTS = 1,  // read 1x int16_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__SINGL = 2,  // read 1x int16_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__LISTN = 3,  // read 1x int8_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__TRAW  = 4,  // read 1x int32_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__LIGHT = 5,  // writ 4x int8_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__PING  = 6,  // ??   1x int8_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__ADRAW = 7,  // read 1x int16_t
+    PBIO_IODEV_MODE_PUP_ULTRASONIC_SENSOR__CALIB = 8,  // ??   7x int16_t
+};
+
+/**
+ * Modes for SPIKE Force Sensor
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_FORCE_SENSOR__FRAW  = 4,  // read 1x int16_t
+    PBIO_IODEV_MODE_PUP_FORCE_SENSOR__CALIB = 6,  // ??   8x int16_t
+};
+
+/**
+ * Modes for Technic Color Light Matrix
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_COLOR_LIGHT_MATRIX__LEV_O = 0,
+    PBIO_IODEV_MODE_PUP_COLOR_LIGHT_MATRIX__COL_O = 1,
+    PBIO_IODEV_MODE_PUP_COLOR_LIGHT_MATRIX__PIX_O = 2,
+    PBIO_IODEV_MODE_PUP_COLOR_LIGHT_MATRIX__TRANS = 3,
+};
+
+/**
+ * Modes for Powered Up motors with relative encoders
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_REL_MOTOR__POWER = 0,
+    PBIO_IODEV_MODE_PUP_REL_MOTOR__SPEED = 1,
+    PBIO_IODEV_MODE_PUP_REL_MOTOR__POS   = 2,
+    PBIO_IODEV_MODE_PUP_REL_MOTOR__TEST  = 3,
+};
+
+/**
+ * Modes for Powered Up motors with absolute encoders
+ */
+enum {
+    PBIO_IODEV_MODE_PUP_ABS_MOTOR__POWER = 0,
+    PBIO_IODEV_MODE_PUP_ABS_MOTOR__SPEED = 1,
+    PBIO_IODEV_MODE_PUP_ABS_MOTOR__POS   = 2,
+    PBIO_IODEV_MODE_PUP_ABS_MOTOR__APOS  = 3,
+    PBIO_IODEV_MODE_PUP_ABS_MOTOR__CALIB = 4,
+    PBIO_IODEV_MODE_PUP_ABS_MOTOR__STATS = 5,
+};
+
+/**
  * Data types used by I/O devices.
  */
 typedef enum {
@@ -201,9 +431,9 @@ typedef enum {
      */
     PBIO_IODEV_CAPABILITY_FLAG_NONE = 0,
     /**
-     * Indicates that this device is a motor.
+     * Indicates that this device is a DC output such as a motor or a light.
      */
-    PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR = 1 << 0,
+    PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT = 1 << 0,
     /**
      * Indicates that the motor provides speed feedback.
      */
@@ -227,11 +457,11 @@ typedef enum {
 } pbio_iodev_capability_flags_t;
 
 /**
- * Macro for testing if I/O device is a motor.
+ * Macro for testing if I/O device is a dc output such as a motor or light.
  *
  * @param [in] d    Pointer to pbio_iodev_t.
  */
-#define PBIO_IODEV_IS_MOTOR(d) ((d)->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_IS_MOTOR)
+#define PBIO_IODEV_IS_DC_OUTPUT(d) ((d)->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_IS_DC_OUTPUT)
 
 /**
  * Macro for testing if I/O device is a motor with speed/position feedback.
@@ -239,6 +469,14 @@ typedef enum {
  * @param [in] d    Pointer to pbio_iodev_t.
  */
 #define PBIO_IODEV_IS_FEEDBACK_MOTOR(d) ((d)->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_REL_POS)
+
+/**
+ * Macro for testing if I/O device is a motor with absolute position feedback.
+ *
+ * @param [in] d    Pointer to pbio_iodev_t.
+ */
+#define PBIO_IODEV_IS_ABS_MOTOR(d) ((d)->info->capability_flags & PBIO_IODEV_CAPABILITY_FLAG_HAS_MOTOR_ABS_POS)
+
 
 
 /**
@@ -291,7 +529,7 @@ typedef struct {
     uint8_t num_modes;
     /**
      * Bit flags indicating which combination of modes can be used at the same
-     * time. Each bit cooresponds to the mode of the same number (0 to 15).
+     * time. Each bit corresponds to the mode of the same number (0 to 15).
      */
     uint16_t mode_combos;
     /**
@@ -364,3 +602,5 @@ pbio_error_t pbio_iodev_write_end(pbio_iodev_t *iodev);
 void pbio_iodev_write_cancel(pbio_iodev_t *iodev);
 
 #endif // _PBIO_IODEV_H_
+
+/** @} */

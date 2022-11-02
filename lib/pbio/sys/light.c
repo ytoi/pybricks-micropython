@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2020 The Pybricks Authors
+// Copyright (c) 2020,2022 The Pybricks Authors
 
 #include <assert.h>
 #include <stdbool.h>
@@ -7,6 +7,8 @@
 
 #include <contiki.h>
 
+#include <pbdrv/charger.h>
+#include <pbdrv/config.h>
 #include <pbdrv/led.h>
 #include <pbio/color.h>
 #include <pbio/error.h>
@@ -167,7 +169,9 @@ static void pbsys_status_light_handle_status_change(void) {
     bool shutdown = pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN);
 
     // This determines which indication has the highest precedence.
-    if (ble_advertising && low_voltage) {
+    if (shutdown) {
+        new_indication = PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN;
+    } else if (ble_advertising && low_voltage) {
         new_indication = PBSYS_STATUS_LIGHT_INDICATION_BLE_ADVERTISING_AND_LOW_VOLTAGE;
     } else if (ble_advertising) {
         new_indication = PBSYS_STATUS_LIGHT_INDICATION_BLE_ADVERTISING;
@@ -179,8 +183,6 @@ static void pbsys_status_light_handle_status_change(void) {
         new_indication = PBSYS_STATUS_LIGHT_INDICATION_BLE_LOW_SIGNAL;
     } else if (low_voltage) {
         new_indication = PBSYS_STATUS_LIGHT_INDICATION_LOW_VOLTAGE;
-    } else if (shutdown) {
-        new_indication = PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN;
     }
 
     // if the indication changed, then reset the indication pattern to the beginning
@@ -214,7 +216,7 @@ void pbsys_status_light_handle_event(process_event_t event, process_data_t data)
     if (event == PBIO_EVENT_STATUS_SET || event == PBIO_EVENT_STATUS_CLEARED) {
         pbsys_status_light_handle_status_change();
     }
-    if (event == PBIO_EVENT_STATUS_SET && (pbio_pybricks_status_t)data == PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING) {
+    if (event == PBIO_EVENT_STATUS_SET && (pbio_pybricks_status_t)(intptr_t)data == PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING) {
         pbio_light_animation_init(&pbsys_status_light->animation, default_user_program_light_animation_next);
         pbio_light_animation_start(&pbsys_status_light->animation);
     }
@@ -265,6 +267,36 @@ void pbsys_status_light_poll(void) {
             pbdrv_led_set_hsv(led, &hsv);
         }
     }
+
+    // REVISIT: We should be able to make this event driven instead of polled.
+    #if PBDRV_CONFIG_CHARGER
+
+    // FIXME: battery light is currently hard-coded to id 1 on all platforms
+    if (pbdrv_led_get_dev(1, &led) == PBIO_SUCCESS) {
+        pbio_color_t color;
+        switch (pbdrv_charger_get_status())
+        {
+            case PBDRV_CHARGER_STATUS_CHARGE:
+                color = PBIO_COLOR_RED;
+                break;
+            case PBDRV_CHARGER_STATUS_COMPLETE:
+                color = PBIO_COLOR_GREEN;
+                break;
+            case PBDRV_CHARGER_STATUS_FAULT:
+                // TODO: This state should flash like official LEGO firmware.
+                color = PBIO_COLOR_YELLOW;
+                break;
+            default:
+                color = PBIO_COLOR_NONE;
+                break;
+        }
+
+        pbio_color_hsv_t hsv;
+        pbio_color_to_hsv(color, &hsv);
+        pbdrv_led_set_hsv(led, &hsv);
+    }
+
+    #endif // PBDRV_CONFIG_CHARGER
 }
 
 #endif // PBSYS_CONFIG_STATUS_LIGHT

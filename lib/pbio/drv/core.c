@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2020-2021 The Pybricks Authors
+// Copyright (c) 2020-2022 The Pybricks Authors
 
 #include <contiki.h>
 
@@ -12,9 +12,11 @@
 #include "ioport/ioport.h"
 #include "led/led_array.h"
 #include "led/led.h"
+#include "motor_driver/motor_driver.h"
 #include "pwm/pwm.h"
 #include "reset/reset.h"
 #include "sound/sound.h"
+#include "usb/usb.h"
 #include "watchdog/watchdog.h"
 
 uint32_t pbdrv_init_busy_count;
@@ -34,9 +36,11 @@ void pbdrv_init(void) {
     pbdrv_ioport_init();
     pbdrv_led_array_init();
     pbdrv_led_init();
+    pbdrv_motor_driver_init();
     pbdrv_pwm_init();
     pbdrv_reset_init();
     pbdrv_sound_init();
+    pbdrv_usb_init();
     pbdrv_watchdog_init();
 
     while (pbdrv_init_busy()) {

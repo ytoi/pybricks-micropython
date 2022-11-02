@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 #include <pbdrv/config.h>
 #include <pbdrv/gpio.h>
@@ -13,6 +13,7 @@
 
 #include "../../drv/adc/adc_stm32_hal.h"
 #include "../../drv/button/button_gpio.h"
+#include "../../drv/counter/counter_lpf2.h"
 #include "../../drv/led/led_pwm.h"
 #include "../../drv/pwm/pwm_stm32_tim.h"
 #include "../../drv/uart/uart_stm32f4_ll_irq.h"
@@ -133,6 +134,8 @@ void DMA2_Stream0_IRQHandler(void) {
     pbdrv_adc_stm32_hal_handle_irq();
 }
 
+// buttons
+
 const pbdrv_button_gpio_platform_t pbdrv_button_gpio_platform[PBDRV_CONFIG_BUTTON_GPIO_NUM_BUTTON] = {
     [0] = {
         .gpio = { .bank = GPIOC, .pin = 13 },
@@ -140,10 +143,30 @@ const pbdrv_button_gpio_platform_t pbdrv_button_gpio_platform[PBDRV_CONFIG_BUTTO
     }
 };
 
+// counters
+
+const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV] = {
+    [0] = {
+        .counter_id = 0,
+        .port_id = PBIO_PORT_ID_1,
+    },
+};
+
 // LED
+
+// TODO: these are move/city hub values
+static const pbdrv_led_pwm_platform_color_t pbdrv_led_pwm_color = {
+    .r_factor = 1000,
+    .g_factor = 270,
+    .b_factor = 200,
+    .r_brightness = 174,
+    .g_brightness = 1590,
+    .b_brightness = 327,
+};
 
 const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED_PWM_NUM_DEV] = {
     {
+        .color = &pbdrv_led_pwm_color,
         .id = LED_DEV_0,
         .r_id = PWM_DEV_2,
         .r_ch = 1,
@@ -219,7 +242,6 @@ const pbdrv_uart_stm32f4_ll_irq_platform_data_t
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDEV_NUM_DEV] = {
     [0] = {
         .uart_id = UART_ID_0,
-        .counter_id = COUNTER_DEV_0,
     },
 };
 
@@ -250,7 +272,7 @@ void USART2_IRQHandler(void) {
 // in platform.c
 pbio_error_t pbdrv_ioport_get_iodev(pbio_port_id_t port, pbio_iodev_t **iodev) {
     if (port != PBIO_PORT_ID_1) {
-        return PBIO_ERROR_INVALID_PORT;
+        return PBIO_ERROR_INVALID_ARG;
     }
 
     return pbio_uartdev_get(0, iodev);

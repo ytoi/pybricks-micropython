@@ -5,7 +5,7 @@ import itertools
 import asyncio
 
 
-from pybricksdev.connections import PybricksHub
+from pybricksdev.connections.pybricks import PybricksHub
 from pybricksdev.ble import find_device
 
 
@@ -22,7 +22,7 @@ async def main():
     scripts.sort(key=test_passed)
 
     # Establish connection.
-    device = await find_device("Pybricks Hub")
+    device = await find_device()
     hub = PybricksHub()
     await hub.connect(device)
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 /**
- * @addtogroup Button Brick and Remote Control Buttons
+ * @addtogroup Button pbio/button: Brick and Remote Control Buttons
  *
  * Provides functions to test when a button is pressed.
  * @{
@@ -109,7 +109,6 @@ typedef pbio_error_t (*pbio_button_is_pressed_func_t)(pbio_button_flags_t *press
  * Get bitmask indicating currently pressed buttons.
  * @param [out] pressed     Bitmask indicating which buttons are pressed
  * @return                  ::PBIO_SUCCESS if the call was successful,
- *                          ::PBIO_ERROR_INVALID_PORT if port is not a valid port
  *                          ::PBIO_ERROR_NO_DEV if port is valid but a device with buttons is not connected
  *                          ::PBIO_ERROR_IO if there was an I/O error
  */

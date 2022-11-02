@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
 
 #include <stdbool.h>
 
@@ -17,12 +17,15 @@
 #include "../../drv/bluetooth/bluetooth_btstack.h"
 #include "../../drv/button/button_gpio.h"
 #include "../../drv/charger/charger_mp2639a.h"
+#include "../../drv/counter/counter_lpf2.h"
 #include "../../drv/ioport/ioport_lpf2.h"
 #include "../../drv/led/led_pwm.h"
+#include "../../drv/motor_driver/motor_driver_hbridge_pwm.h"
 #include "../../drv/pwm/pwm_lp50xx_stm32.h"
 #include "../../drv/pwm/pwm_stm32_tim.h"
 #include "../../drv/sound/sound_stm32_hal_dac.h"
 #include "../../drv/uart/uart_stm32f4_ll_irq.h"
+#include "../../drv/usb/usb_stm32.h"
 
 // Special symbols for firmware compatibility with official apps
 typedef struct {
@@ -36,7 +39,7 @@ typedef struct {
 // defined in linker script
 extern const uint32_t _checksum;
 
-const lego_fw_info_t __attribute__((section(".fw_info"))) fw_info = {
+const lego_fw_info_t __attribute__((section(".fw_info"), used)) fw_info = {
     // These values are not used.
     .fw_ver = PBIO_VERSION_STR,
     .checksum = &_checksum,
@@ -148,6 +151,19 @@ const pbdrv_charger_mp2639a_platform_data_t pbdrv_charger_mp2639a_platform_data 
     .ib_adc_ch = 3,
 };
 
+// counters
+
+const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_CONFIG_COUNTER_LPF2_NUM_DEV] = {
+    [COUNTER_PORT_A] = {
+        .counter_id = COUNTER_PORT_A,
+        .port_id = PBIO_PORT_ID_A,
+    },
+    [COUNTER_PORT_B] = {
+        .counter_id = COUNTER_PORT_B,
+        .port_id = PBIO_PORT_ID_B,
+    },
+};
+
 // I/O ports
 
 const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
@@ -176,8 +192,18 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
 
 // LED
 
+static const pbdrv_led_pwm_platform_color_t pbdrv_led_pwm_color = {
+    .r_factor = 1000,
+    .g_factor = 270,
+    .b_factor = 200,
+    .r_brightness = 174,
+    .g_brightness = 1590,
+    .b_brightness = 327,
+};
+
 const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED_PWM_NUM_DEV] = {
     {
+        .color = &pbdrv_led_pwm_color,
         .id = LED_DEV_0_STATUS,
         .r_id = PWM_DEV_3_LP50XX,
         .r_ch = 3,
@@ -188,6 +214,7 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
         .scale_factor = 35,
     },
     {
+        .color = &pbdrv_led_pwm_color,
         .id = LED_DEV_1_BATTERY,
         .r_id = PWM_DEV_3_LP50XX,
         .r_ch = 0,
@@ -196,6 +223,38 @@ const pbdrv_led_pwm_platform_data_t pbdrv_led_pwm_platform_data[PBDRV_CONFIG_LED
         .b_id = PWM_DEV_3_LP50XX,
         .b_ch = 2,
         .scale_factor = 35,
+    },
+};
+
+// Motor driver
+
+const pbdrv_motor_driver_hbridge_pwm_platform_data_t
+    pbdrv_motor_driver_hbridge_pwm_platform_data[PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV] = {
+    // Port A
+    {
+        .pin1_gpio.bank = GPIOB,
+        .pin1_gpio.pin = 6,
+        .pin1_alt = GPIO_AF2_TIM4,
+        .pin1_pwm_id = PWM_DEV_2_TIM4,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 7,
+        .pin2_alt = GPIO_AF2_TIM4,
+        .pin2_pwm_id = PWM_DEV_2_TIM4,
+        .pin2_pwm_ch = 2,
+    },
+    // Port B
+    {
+        .pin1_gpio.bank = GPIOB,
+        .pin1_gpio.pin = 4,
+        .pin1_alt = GPIO_AF2_TIM3,
+        .pin1_pwm_id = PWM_DEV_1_TIM3,
+        .pin1_pwm_ch = 1,
+        .pin2_gpio.bank = GPIOB,
+        .pin2_gpio.pin = 5,
+        .pin2_alt = GPIO_AF2_TIM3,
+        .pin2_pwm_id = PWM_DEV_1_TIM3,
+        .pin2_pwm_ch = 2,
     },
 };
 
@@ -336,14 +395,11 @@ void USART3_IRQHandler(void) {
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDEV_NUM_DEV] = {
     [COUNTER_PORT_A] = {
         .uart_id = UART_PORT_A,
-        .counter_id = COUNTER_PORT_A,
     },
     [COUNTER_PORT_B] = {
         .uart_id = UART_PORT_B,
-        .counter_id = COUNTER_PORT_B,
     },
 };
-
 
 // STM32 HAL integration
 
@@ -355,8 +411,8 @@ const uint8_t AHBPrescTable[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 6, 7, 8,
 const uint8_t APBPrescTable[8] = { 0, 0, 0, 0, 1, 2, 3, 4 };
 
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
-    GPIO_InitTypeDef gpio_init = { 0 };
-    ADC_ChannelConfTypeDef adc_ch_config = { 0 };
+    GPIO_InitTypeDef gpio_init = { };
+    ADC_ChannelConfTypeDef adc_ch_config = { };
 
     // clocks are enabled in SystemInit
     assert_param(__HAL_RCC_TIM8_IS_CLK_ENABLED());
@@ -433,36 +489,78 @@ void DMA2_Stream0_IRQHandler(void) {
     pbdrv_adc_stm32_hal_handle_irq();
 }
 
+void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI2) {
+        // External flash
+        GPIO_InitTypeDef gpio_init;
+
+        // /CS, active low
+        gpio_init.Pin = GPIO_PIN_12;
+        gpio_init.Mode = GPIO_MODE_OUTPUT_PP;
+        gpio_init.Pull = GPIO_NOPULL;
+        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+
+        // SPI2_SCK
+        gpio_init.Pin = GPIO_PIN_10;
+        gpio_init.Mode = GPIO_MODE_AF_PP;
+        gpio_init.Pull = GPIO_NOPULL;
+        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+        gpio_init.Alternate = GPIO_AF5_SPI2;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+
+        // SPI2_MISO | SPI2_MOSI
+        gpio_init.Pin = GPIO_PIN_2 | GPIO_PIN_3;
+        HAL_GPIO_Init(GPIOC, &gpio_init);
+    }
+}
+
 // USB
 
 void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
-    GPIO_InitTypeDef GPIO_InitStruct;
+    GPIO_InitTypeDef gpio_init;
 
     // Data pins
-    GPIO_InitStruct.Pin = (GPIO_PIN_11 | GPIO_PIN_12);
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    gpio_init.Pin = (GPIO_PIN_11 | GPIO_PIN_12);
+    gpio_init.Mode = GPIO_MODE_AF_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_HIGH;
+    gpio_init.Alternate = GPIO_AF10_OTG_FS;
+    HAL_GPIO_Init(GPIOA, &gpio_init);
 
     // VBUS pin
-    GPIO_InitStruct.Pin = GPIO_PIN_9;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    gpio_init.Pin = GPIO_PIN_9;
+    gpio_init.Mode = GPIO_MODE_IT_RISING_FALLING;
+    gpio_init.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &gpio_init);
 
     HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+    HAL_NVIC_SetPriority(EXTI9_5_IRQn, 6, 1);
+    HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+    // ensure correct inital state
+    HAL_GPIO_EXTI_Callback(GPIO_PIN_9);
 }
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
+    HAL_NVIC_DisableIRQ(EXTI9_5_IRQn);
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
 }
 
 void OTG_FS_IRQHandler(void) {
-    extern PCD_HandleTypeDef hpcd;
-    HAL_PCD_IRQHandler(&hpcd);
+    pbdrv_usb_stm32_handle_otg_fs_irq();
+}
+
+void EXTI9_5_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_9);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t pin) {
+    if (pin == GPIO_PIN_9) {
+        pbdrv_usb_stm32_handle_vbus_irq(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9));
+    }
 }
 
 // IMU
@@ -551,7 +649,7 @@ void SystemInit(void) {
         RCC_AHB1ENR_GPIODEN | RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMA2EN;
     RCC->APB1ENR |= RCC_APB1ENR_USART2EN | RCC_APB1ENR_USART3EN | RCC_APB1ENR_UART5EN |
         RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN |
-        RCC_APB1ENR_I2C3EN | RCC_APB1ENR_FMPI2C1EN;
+        RCC_APB1ENR_I2C3EN | RCC_APB1ENR_FMPI2C1EN | RCC_APB1ENR_SPI2EN;
     RCC->APB2ENR |= RCC_APB2ENR_TIM8EN | RCC_APB2ENR_ADC1EN | RCC_APB2ENR_SYSCFGEN;
     RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
 

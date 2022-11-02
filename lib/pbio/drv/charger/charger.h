@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2021 The Pybricks Authors
+// Copyright (c) 2021-2022 The Pybricks Authors
 
 #ifndef _INTERNAL_PBDRV_CHARGER_H_
 #define _INTERNAL_PBDRV_CHARGER_H_
@@ -7,6 +7,8 @@
 #include <pbdrv/config.h>
 
 #if PBDRV_CONFIG_CHARGER
+
+#include <pbdrv/charger.h>
 
 void pbdrv_charger_init(void);
 

@@ -5,6 +5,12 @@
 
 #if PYBRICKS_PY_PARAMETERS
 
+#if !MICROPY_MODULE_BUILTIN_INIT
+// The color dictionary is built in the module __init__, so we get a segfault
+// if this is not enabled.
+#error "pybricks.parameters.Color requires that MICROPY_MODULE_BUILTIN_INIT is enabled"
+#endif
+
 #include <pbio/color.h>
 
 #include "py/objstr.h"
@@ -249,6 +255,7 @@ STATIC mp_obj_t pb_type_Color_binary_op(mp_binary_op_t op, mp_obj_t lhs_in, mp_o
         case MP_BINARY_OP_LSHIFT:
             // lshift is negative rshift, so negate and fall through to rshift
             rhs_in = mp_obj_new_int(-pb_obj_get_int(rhs_in));
+            MP_FALLTHROUGH
         case MP_BINARY_OP_RSHIFT:
             // Color shifting shifts the hue
             return pb_type_Color_make_new_helper(

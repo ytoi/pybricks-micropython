@@ -10,8 +10,12 @@ import numpy
 import os
 import pathlib
 import shutil
+import subprocess
+import sys
 
-from pybricksdev.connections import PybricksHub, REPLHub
+from pybricksdev.connections.pybricks import PybricksHub
+from pybricksdev.connections.lego import REPLHub
+
 from pybricksdev.ble import find_device
 
 
@@ -21,7 +25,7 @@ async def run_pybricks_script(script_name):
     # Connect to the hub.
     print("Searching for a hub.")
     hub = PybricksHub()
-    address = await find_device("Pybricks Hub")
+    address = await find_device()
     await hub.connect(address)
     print("Connected!")
 
@@ -77,6 +81,7 @@ def plot_servo_data(time, data, build_dir, subtitle=None):
     # Read state columns.
     count = data[:, 2]
     rate = data[:, 3]
+    applied_actuation_type = data[:, 4]
     voltage = data[:, 5]
     count_est = data[:, 6]
     rate_est = data[:, 7]
@@ -126,7 +131,7 @@ def plot_control_data(time, data, build_dir, subtitle=None):
     maneuver_time = data[:, 1]
     count = data[:, 2]
     rate = data[:, 3]
-    actuation_type = data[:, 4]
+    requested_actuation_type = data[:, 4]
     torque_total = data[:, 5]
     count_ref = data[:, 6]
     rate_ref = data[:, 7]
@@ -138,10 +143,10 @@ def plot_control_data(time, data, build_dir, subtitle=None):
 
     title = "control" if subtitle is None else "control_" + subtitle
 
-    figure, axes = matplotlib.pyplot.subplots(nrows=4, ncols=1, figsize=(15, 12))
+    figure, axes = matplotlib.pyplot.subplots(nrows=5, ncols=1, figsize=(15, 15))
     figure.suptitle(title, fontsize=20)
 
-    position_axis, error_axis, speed_axis, torque_axis = axes
+    position_axis, error_axis, speed_axis, torque_axis, time_axis = axes
 
     position_axis.plot(time, count, drawstyle="steps-post", label="Reported count")
     position_axis.plot(time, count_est, drawstyle="steps-post", label="Observer")
@@ -166,7 +171,10 @@ def plot_control_data(time, data, build_dir, subtitle=None):
     torque_axis.plot(time, torque_d, label="D", drawstyle="steps-post")
     torque_axis.plot(time, torque_total, label="Total", drawstyle="steps-post")
     torque_axis.set_ylabel("torque")
-    torque_axis.set_xlabel("time (ms)")
+
+    time_axis.plot(time, maneuver_time / 1000, label="t - t_0", drawstyle="steps-post")
+    time_axis.set_ylabel("Maneuver time (ms)")
+    time_axis.set_xlabel("time (ms)")
 
     for axis in axes:
         axis.grid(True)
@@ -176,17 +184,66 @@ def plot_control_data(time, data, build_dir, subtitle=None):
     figure.savefig(build_dir / (title + ".png"))
 
 
+def make_plots(build_dir, show=True):
+    # Plot single motor data if available.
+    try:
+        servo_time, servo_data = get_data(build_dir / "servo.txt")
+        plot_servo_data(servo_time, servo_data, build_dir)
+    except FileNotFoundError:
+        pass
+
+    # Plot control data if available.
+    try:
+        control_time, control_data = get_data(build_dir / "control.txt")
+        plot_control_data(control_time, control_data, build_dir)
+    except (IndexError, FileNotFoundError):
+        pass
+
+    # Plot drive base data if available.
+    try:
+        # Drive base case
+        servo_time, servo_data = get_data(build_dir / "servo_left.txt")
+        plot_servo_data(servo_time, servo_data, build_dir, "left")
+
+        servo_time, servo_data = get_data(build_dir / "servo_right.txt")
+        plot_servo_data(servo_time, servo_data, build_dir, "right")
+
+        control_time, control_data = get_data(build_dir / "control_distance.txt")
+        plot_control_data(control_time, control_data, build_dir, "distance")
+
+        control_time, control_data = get_data(build_dir / "control_heading.txt")
+        plot_control_data(control_time, control_data, build_dir, "heading")
+    except FileNotFoundError:
+        pass
+
+    # If requested, show blocking windows with plots.
+    if show:
+        matplotlib.pyplot.show(block=True)
+
+
 # Parse user argument.
 parser = argparse.ArgumentParser(description="Run motor script and show log.")
 parser.add_argument("file", help="Script to run")
 parser.add_argument("--show", dest="show", default=False, action="store_true")
-parser.add_argument("--usb", dest="usb", default=False, action="store_true")
+parser.add_argument(
+    "--target",
+    dest="target",
+    help="target type: %(choices)s",
+    choices=["ble", "usb", "virtual"],
+    default="ble",
+)
 args = parser.parse_args()
+
+# Sometimes we don't want to do new experiments but just visualize old data.
+if pathlib.Path(args.file).is_dir():
+    make_plots(pathlib.Path(args.file), args.show)
+    sys.exit()
 
 # Local paths and data directories.
 time_string = datetime.datetime.now().strftime("-%Y-%m-%d-%H%M-%S")
 script_base_name, _ = os.path.splitext(os.path.split(args.file)[-1])
-build_dir = pathlib.Path(__file__).parent / "build" / (script_base_name + time_string)
+test_dir = pathlib.Path(__file__).parent
+build_dir = test_dir / "build" / (script_base_name + time_string)
 pathlib.Path(build_dir).mkdir(parents=True, exist_ok=True)
 
 # Copy script to data directory to archive experiment.
@@ -197,48 +254,29 @@ shutil.copyfile(args.file, script_archive)
 matplotlib.use("TkAgg")
 matplotlib.interactive(True)
 
-# Run the script.
-if args.usb:
+# Run the script on physical or virtual platform.
+if args.target == "usb":
     hub_output = asyncio.run(run_usb_repl_script(script_archive))
-else:
+elif args.target == "ble":
     hub_output = asyncio.run(run_pybricks_script(script_archive))
+else:
+    top_path = (test_dir / "../..").absolute()
+    bin_path = top_path / "bricks/virtualhub/build/virtualhub-micropython"
+    if "PYTHONPATH" not in os.environ:
+        os.environ["PYTHONPATH"] = str(top_path / "lib/pbio/cpython")
+    if "PBIO_VIRTUAL_PLATFORM_MODULE" not in os.environ:
+        os.environ["PBIO_VIRTUAL_PLATFORM_MODULE"] = "pbio_virtual.platform.turtle"
+    result = subprocess.run(
+        [bin_path, script_archive.absolute()], capture_output=True, cwd=build_dir.absolute()
+    )
+    hub_output = (result.stdout or result.stderr).split(b"\n")
+    for line in hub_output:
+        print(line.decode())
 
 # Save its standard output.
 with open(build_dir / "hub_output.txt", "wb") as f:
     for line in hub_output:
         f.write(line + b"\n")
 
-# Plot single motor data if available.
-try:
-    servo_time, servo_data = get_data(build_dir / "servo.txt")
-    plot_servo_data(servo_time, servo_data, build_dir)
-except FileNotFoundError:
-    pass
-
-# Plot control data if available.
-try:
-    control_time, control_data = get_data(build_dir / "control.txt")
-    plot_control_data(control_time, control_data, build_dir)
-except (IndexError, FileNotFoundError):
-    pass
-
-# Plot drive base data if available.
-try:
-    # Drive base case
-    servo_time, servo_data = get_data(build_dir / "servo_left.txt")
-    plot_servo_data(servo_time, servo_data, build_dir, "left")
-
-    servo_time, servo_data = get_data(build_dir / "servo_right.txt")
-    plot_servo_data(servo_time, servo_data, build_dir, "right")
-
-    control_time, control_data = get_data(build_dir / "control_distance.txt")
-    plot_control_data(control_time, control_data, build_dir, "distance")
-
-    control_time, control_data = get_data(build_dir / "control_heading.txt")
-    plot_control_data(control_time, control_data, build_dir, "heading")
-except FileNotFoundError:
-    pass
-
-# If requested, show blocking windows with plots.
-if args.show:
-    matplotlib.pyplot.show(block=True)
+# Visualize the data.
+make_plots(build_dir, args.show)

@@ -114,7 +114,7 @@ STATIC mp_obj_t nxtdevices_ColorSensor_hsv(mp_obj_t self_in) {
     pb_type_Color_obj_t *color = pb_type_Color_new_empty();
 
     // Convert and store RGB as HSV
-    color_map_rgb_to_hsv(&rgb, &color->hsv);
+    pb_color_map_rgb_to_hsv(&rgb, &color->hsv);
 
     // Return color
     return MP_OBJ_FROM_PTR(color);
@@ -134,7 +134,7 @@ STATIC mp_obj_t nxtdevices_ColorSensor_color(mp_obj_t self_in) {
         .g = all[1],
         .b = all[2],
     };
-    color_map_rgb_to_hsv(&rgb, &hsv);
+    pb_color_map_rgb_to_hsv(&rgb, &hsv);
 
     // Get and return discretized color based on HSV
     return pb_color_map_get_color(&self->color_map, &hsv);
@@ -149,16 +149,24 @@ STATIC const mp_rom_map_elem_t nxtdevices_ColorSensor_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_reflection), MP_ROM_PTR(&nxtdevices_ColorSensor_reflection_obj)           },
     { MP_ROM_QSTR(MP_QSTR_color),      MP_ROM_PTR(&nxtdevices_ColorSensor_color_obj)                },
     { MP_ROM_QSTR(MP_QSTR_detectable_colors),  MP_ROM_PTR(&pb_ColorSensor_detectable_colors_obj)                    },
-    { MP_ROM_QSTR(MP_QSTR_light),      MP_ROM_ATTRIBUTE_OFFSET(nxtdevices_ColorSensor_obj_t, light) },
 };
 STATIC MP_DEFINE_CONST_DICT(nxtdevices_ColorSensor_locals_dict, nxtdevices_ColorSensor_locals_dict_table);
 
+STATIC const pb_attr_dict_entry_t nxtdevices_ColorSensor_attr_dict[] = {
+    PB_DEFINE_CONST_ATTR_RO(MP_QSTR_light, nxtdevices_ColorSensor_obj_t, light),
+};
+
 // type(pybricks.nxtdevices.ColorSensor)
-const mp_obj_type_t pb_type_nxtdevices_ColorSensor = {
-    { &mp_type_type },
-    .name = MP_QSTR_ColorSensor,
-    .make_new = nxtdevices_ColorSensor_make_new,
-    .locals_dict = (mp_obj_dict_t *)&nxtdevices_ColorSensor_locals_dict,
+const pb_obj_with_attr_type_t pb_type_nxtdevices_ColorSensor = {
+    .type = {
+        .base = { .type = &mp_type_type },
+        .name = MP_QSTR_ColorSensor,
+        .make_new = nxtdevices_ColorSensor_make_new,
+        .attr = pb_attribute_handler,
+        .locals_dict = (mp_obj_dict_t *)&nxtdevices_ColorSensor_locals_dict,
+    },
+    .attr_dict = nxtdevices_ColorSensor_attr_dict,
+    .attr_dict_size = MP_ARRAY_SIZE(nxtdevices_ColorSensor_attr_dict),
 };
 
 #endif // PYBRICKS_PY_NXTDEVICES && PYBRICKS_PY_EV3DEVICES
