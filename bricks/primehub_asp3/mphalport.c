@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2021 The Pybricks Authors
 // Copyright (c) 2013, 2014 Damien P. George
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//            Graduate School of Information Science, Nagoya Univ., JAPAN
 
 #include <stdint.h>
 
@@ -73,9 +75,9 @@ int mp_hal_stdin_rx_chr(void) {
 
 // Send string of given length
 void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
-    extern void low_putchar(char c);
+    extern void tPutLogTarget_ePutLog_putChar(char c);
     while (len--) {
-        low_putchar(*str++);
+        tPutLogTarget_ePutLog_putChar(*str++);
     }
     // serial_wri_dat(TASK_PORTID, str, len)
 }
@@ -99,7 +101,9 @@ int mp_hal_stdin_rx_chr(void) {
 
     // wait for rx interrupt
     while (size = 1, pbsys_bluetooth_rx(&c, &size) != PBIO_SUCCESS) {
-        MICROPY_EVENT_POLL_HOOK
+      //void wup_pybricks(void);
+      //wup_pybricks();
+      //dly_tsk(1000);
     }
 
     return c;
@@ -123,7 +127,7 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
             return;
         }
 
-        MICROPY_EVENT_POLL_HOOK
+        //dly_tsk(1000);
     }
 }
 
