@@ -57,7 +57,7 @@ include ../../micropython/py/mkenv.mk
 
 # qstr definitions (must come before including py.mk)
 QSTR_DEFS = ../pybricks_qstrdefs.h
-QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/primehub_asp3/configport.h
+QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/primehub_spike-rt/configport.h
 
 # MicroPython feature configurations
 MICROPY_ROM_TEXT_COMPRESSION ?= 1
@@ -161,7 +161,7 @@ MPY_CROSS = ../../micropython/mpy-cross/mpy-cross
 
 LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
-SRC_C = $(addprefix bricks/primehub_asp3/,\
+SRC_C = $(addprefix bricks/primehub_spike-rt/,\
 	main.c \
 	mphalport.c \
 	)
