@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2020-2021 The Pybricks Authors
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//            Graduate School of Information Science, Nagoya Univ., JAPAN
 
 #include <pbsys/config.h>
 
@@ -249,7 +251,9 @@ PROCESS_THREAD(pbsys_bluetooth_process, ev, data) {
         pbsys_status_set(PBIO_PYBRICKS_STATUS_BLE_ADVERTISING);
         PROCESS_WAIT_UNTIL(
             pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)
+#if !PBSYS_CONFIG_BLUETOOTH_ADVERTISE_WHILE_USER_PROGRAM_RUNNING
             || pbsys_status_test(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING)
+#endif
             || pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN));
 
         if (!pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)) {
@@ -293,7 +297,9 @@ PROCESS_THREAD(pbsys_bluetooth_process, ev, data) {
         }
 
         reset_all();
+#if !PBSYS_CONFIG_BLUETOOTH_ADVERTISE_WHILE_USER_PROGRAM_RUNNING
         PROCESS_WAIT_WHILE(pbsys_status_test(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING));
+#endif
 
         // reset Bluetooth chip
         pbdrv_bluetooth_power_on(false);
