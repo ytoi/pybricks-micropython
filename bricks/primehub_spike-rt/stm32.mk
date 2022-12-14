@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2013, 2014 Damien P. George
 # Copyright (c) 2019-2022 The Pybricks Authors
+# Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+#           	Graduate School of Information Science, Nagoya Univ., JAPAN
 
 # This file is shared by all STM32-based Pybricks ports
 # Other ports should not use this file

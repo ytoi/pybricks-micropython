@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2019-2020 The Pybricks Authors
 # Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
-#          	Graduate School of Information Science, Nagoya Univ., JAPAN
+#          		Graduate School of Information Science, Nagoya Univ., JAPAN
 
 PBIO_PLATFORM = prime_hub_spike-rt
 PB_MCU_SERIES = F4
