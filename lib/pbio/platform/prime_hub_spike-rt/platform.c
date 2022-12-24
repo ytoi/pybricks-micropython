@@ -11,7 +11,7 @@
 #include "pbio/uartdev.h"
 #include "pbio/light_matrix.h"
 
-#if PBIO_ON_ASP3
+#if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
 
@@ -859,7 +859,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     gpio_init.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &gpio_init);
 
-    #if PBIO_ON_ASP3
+    #if PBDRV_ON_ASP3
     // TODO
     ena_int(OTG_FS_IRQn + 16);
     ena_int(EXTI9_5_IRQn + 16);
@@ -875,7 +875,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
 }
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
-    #if PBIO_ON_ASP3
+    #if PBDRV_ON_ASP3
     // TODO
     dis_int(OTG_FS_IRQn + 16);
     #else
@@ -918,7 +918,7 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
         gpio_init.Alternate = GPIO_AF9_I2C2;
         HAL_GPIO_Init(GPIOB, &gpio_init);
 
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         ena_int(I2C2_ER_IRQn + 16);
         ena_int(I2C2_EV_IRQn + 16);
         #else

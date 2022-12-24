@@ -15,7 +15,7 @@
 
 #include <contiki.h>
 
-#if PBIO_ON_ASP3
+#if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
 
@@ -383,7 +383,7 @@ static void handle_exit(void) {
         LL_DMA_DisableChannel(pdata->rx_dma, pdata->rx_dma_ch);
         LL_DMA_DisableChannel(pdata->tx_dma, pdata->tx_dma_ch);
 
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         dis_int(pdata->uart_irq + 16);
         dis_int(pdata->rx_dma_irq + 16);
         dis_int(pdata->tx_dma_irq + 16);
@@ -422,7 +422,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
 
         LL_DMA_EnableIT_TC(pdata->tx_dma, pdata->tx_dma_ch);
 
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         ena_int(pdata->tx_dma_irq + 16);
         #else
         NVIC_SetPriority(pdata->tx_dma_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 2, 1));
@@ -446,7 +446,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         LL_DMA_EnableIT_HT(pdata->rx_dma, pdata->rx_dma_ch);
         LL_DMA_EnableIT_TC(pdata->rx_dma, pdata->rx_dma_ch);
 
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         ena_int(pdata->rx_dma_irq + 16);
         #else
         NVIC_SetPriority(pdata->rx_dma_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 2, 0));
@@ -481,7 +481,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
             LL_USART_EnableIT_IDLE(pdata->uart);
         }
 
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         ena_int(pdata->uart_irq + 16);
         #else
         NVIC_SetPriority(pdata->uart_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 1, 0));

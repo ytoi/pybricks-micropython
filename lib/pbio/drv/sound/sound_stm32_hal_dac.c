@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#if PBIO_ON_ASP3
+#if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
 
@@ -71,7 +71,7 @@ void pbdrv_sound_init(void) {
 
     HAL_TIM_Base_Start(&pbdrv_sound_htim);
 
-    #if PBIO_ON_ASP3
+    #if PBDRV_ON_ASP3
     ena_int(pdata->dma_irq + 16);
     #else
     HAL_NVIC_SetPriority(pdata->dma_irq, 4, 0);

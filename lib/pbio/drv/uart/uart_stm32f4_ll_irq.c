@@ -24,7 +24,7 @@
 #include "./uart_stm32f4_ll_irq.h"
 #include "../../src/processes.h"
 
-#if PBIO_ON_ASP3
+#if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
 
@@ -250,7 +250,7 @@ static void handle_exit(void) {
         const pbdrv_uart_stm32f4_ll_irq_platform_data_t *pdata = &pbdrv_uart_stm32f4_ll_irq_platform_data[i];
         LL_USART_Disable(pdata->uart);
         
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         dis_int(pdata->irq + 16);
         #else
         NVIC_DisableIRQ(pdata->irq);
@@ -285,7 +285,7 @@ PROCESS_THREAD(pbdrv_uart_process, ev, data) {
         LL_USART_ConfigAsyncMode(pdata->uart);
         LL_USART_EnableIT_RXNE(pdata->uart);
 
-        #if PBIO_ON_ASP3
+        #if PBDRV_ON_ASP3
         ena_int(pdata->irq + 16);
         #else
         NVIC_SetPriority(pdata->irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));

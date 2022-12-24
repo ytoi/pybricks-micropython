@@ -14,7 +14,6 @@
 #define PBIO_CONFIG_TACHO                   (1)
 
 
-#define PBIO_ON_ASP3                        (1)
 #define PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART  (1)
 
 #define PBIO_CONFIG_UARTDEV                 (1)

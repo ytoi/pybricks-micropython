@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2020 The Pybricks Authors
 
-#ifndef _PBDRVCONFIG_H_
-#define _PBDRVCONFIG_H_
+// TODO:
+//#include <pbio/config.h>
+
+#define PBDRV_ON_ASP3                               (1)
 
 #define PBDRV_CONFIG_ADC                            (1)
 #define PBDRV_CONFIG_ADC_STM32_HAL                  (1)
@@ -112,10 +114,11 @@
 #define PBDRV_CONFIG_HAS_PORT_C (1)
 #define PBDRV_CONFIG_HAS_PORT_D (1)
 #define PBDRV_CONFIG_HAS_PORT_E (1)
-#define PBDRV_CONFIG_HAS_PORT_F (!PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART)
+//#define PBDRV_CONFIG_HAS_PORT_F (!PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART)
+#define PBDRV_CONFIG_HAS_PORT_F (0) // TODO:
 
 #define PBDRV_CONFIG_FIRST_MOTOR_PORT       PBIO_PORT_ID_A
-#if PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#if !PBDRV_CONFIG_HAS_PORT_F
 #define PBDRV_CONFIG_LAST_MOTOR_PORT        PBIO_PORT_ID_E
 #else
 #define PBDRV_CONFIG_LAST_MOTOR_PORT        PBIO_PORT_ID_F
@@ -123,5 +126,3 @@
 #define PBDRV_CONFIG_NUM_MOTOR_CONTROLLER   (5)
 
 #define PBDRV_CONFIG_SYS_CLOCK_RATE 96000000
-
-#endif // _PBDRVCONFIG_H_

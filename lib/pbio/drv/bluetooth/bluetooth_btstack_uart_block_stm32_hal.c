@@ -13,7 +13,7 @@
 #include <btstack.h>
 #undef UNUSED // btstack and stm32 both define UNUSED
 
-#if PBIO_ON_ASP3
+#if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
 
@@ -100,7 +100,7 @@ static int btstack_uart_block_stm32_hal_init(const btstack_uart_config_t *config
     __HAL_LINKDMA(&btstack_huart, hdmatx, btstack_tx_hdma);
     __HAL_LINKDMA(&btstack_huart, hdmarx, btstack_rx_hdma);
 
-    #if PBIO_ON_ASP3
+    #if PBDRV_ON_ASP3
     ena_int(pdata->tx_dma_irq + 16);
     ena_int(pdata->rx_dma_irq + 16);
     ena_int(pdata->uart_irq + 16);
