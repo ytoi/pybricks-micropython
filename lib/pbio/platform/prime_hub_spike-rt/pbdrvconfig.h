@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//            Graduate School of Information Science, Nagoya Univ., JAPAN
 
 // TODO:
 //#include <pbio/config.h>
@@ -37,6 +39,16 @@
 #define PBDRV_CONFIG_BLUETOOTH_BTSTACK_HUB_KIND     LWP3_HUB_KIND_TECHNIC_LARGE
 #define PBDRV_CONFIG_BLUETOOTH_BTSTACK_HUB_VARIANT_ADDR 0x08007d80
 
+#define PBDRV_CONFIG_BLOCK_DEVICE                   (1)
+#define PBDRV_CONFIG_BLOCK_DEVICE_W25QXX_STM32      (1)
+#define PBDRV_CONFIG_BLOCK_DEVICE_W25QXX_STM32_W25Q256 (1)
+// Carve out 256K from the reserved 1M area at the start of the flash.
+// This avoids touching the file system, the area read by the LEGO
+// bootloader and the area used by upstream MicroPython. Currently, this
+// just needs to be big enough to back up the user program on shutdown.
+#define PBDRV_CONFIG_BLOCK_DEVICE_W25QXX_STM32_START_ADDRESS (512 * 1024)
+#define PBDRV_CONFIG_BLOCK_DEVICE_W25QXX_STM32_SIZE (256 * 1024)
+
 #define PBDRV_CONFIG_BUTTON                         (1)
 #define PBDRV_CONFIG_BUTTON_RESISTOR_LADDER         (1)
 
@@ -57,6 +69,12 @@
 
 #define PBDRV_CONFIG_GPIO                           (1)
 #define PBDRV_CONFIG_GPIO_STM32F4                   (1)
+
+#define PBDRV_CONFIG_IMU                            (1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32           (1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32_SIGN_X    (-1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32_SIGN_Y    (1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32_SIGN_Z    (-1)
 
 #define PBDRV_CONFIG_IOPORT                         (1)
 #define PBDRV_CONFIG_IOPORT_LPF2                    (1)

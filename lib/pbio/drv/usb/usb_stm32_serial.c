@@ -242,25 +242,6 @@ static void pbdrv_stm32_usb_serial_receive(void) {
 //     return PBIO_SUCCESS;
 // }
 
-bool pbsys_usb_stdout_put_char(uint8_t c) {
-    if (!usb_connected) {
-        // don't lock up print() when USB not connected - data is discarded
-        return false;
-    }
-    if (ringbuf_put(&stdout_buf, c) == 0) {
-        return false;
-    }
-    return true;
-}
-
-bool pbsys_usb_stdin_get_char(uint8_t *c) {
-    if (ringbuf_elements(&stdin_buf) == 0) {
-        return false;
-    }
-    *c = ringbuf_get(&stdin_buf);
-    return true;
-}
-
 // TODO: This process needs to be started by the main USB code (we still want
 // a separate process for serial since it can be polled quite frequently).
 PROCESS_THREAD(pbdrv_usb_process, ev, data) {

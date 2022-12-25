@@ -12,14 +12,13 @@
 
 #include <btstack.h>
 #undef UNUSED // btstack and stm32 both define UNUSED
+#include <stm32f4xx_hal.h>
+#include <stm32f4xx_ll_rcc.h>
+#include <stm32f4xx_ll_usart.h>
 
 #if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
-
-#include <stm32f4xx_hal.h>
-#include <stm32f4xx_ll_rcc.h>
-#include <stm32f4xx_ll_usart.h>
 
 #include "bluetooth_btstack_run_loop_contiki.h"
 #include "bluetooth_btstack_uart_block_stm32_hal.h"
@@ -101,6 +100,7 @@ static int btstack_uart_block_stm32_hal_init(const btstack_uart_config_t *config
     __HAL_LINKDMA(&btstack_huart, hdmarx, btstack_rx_hdma);
 
     #if PBDRV_ON_ASP3
+    // The priorities are initialized in pybricks.cfg
     ena_int(pdata->tx_dma_irq + 16);
     ena_int(pdata->rx_dma_irq + 16);
     ena_int(pdata->uart_irq + 16);

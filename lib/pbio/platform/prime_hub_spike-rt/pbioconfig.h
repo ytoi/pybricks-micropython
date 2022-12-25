@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2019-2022 The Pybricks Authors
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//            Graduate School of Information Science, Nagoya Univ., JAPAN
 
 #define PBIO_CONFIG_BATTERY                 (1)
 #define PBIO_CONFIG_DCMOTOR                 (1)
@@ -13,6 +15,8 @@
 #define PBIO_CONFIG_SERVO_PUP_MOVE_HUB      (0)
 #define PBIO_CONFIG_TACHO                   (1)
 
+//#define SPIKE_RT_CONFIG_USE_PORT_F_AS_USER_UART   (1)
+//#define SPIKE_RT_CONFIG_USE_PORT_E_AS_USER_UART   (0)
 
 #define PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART  (1)
 

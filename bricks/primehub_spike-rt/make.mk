@@ -4,12 +4,23 @@
 # Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
 #           	Graduate School of Information Science, Nagoya Univ., JAPAN
 
-# This file is shared by all STM32-based Pybricks ports
-# Other ports should not use this file
+# This file is a port for SPIKE-RT from ../_common_stm32/make.mk .
 
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
 PBTOP := ../../
-ASP3TOP := $(PBTOP)../../../
+
+# Bricks must specify the following variables in their Makefile
+ifeq ($(PB_MCU_SERIES),)
+$(error "PB_MCU_SERIES is not specified - add it in <hub>/Makefile)
+else
+PB_MCU_SERIES_LCASE = $(subst F,f,$(subst L,l,$(PB_MCU_SERIES)))
+endif
+ifeq ($(PB_CMSIS_MCU),)
+$(error "PB_CMSIS_MCU is not specified - add it in <hub>/Makefile")
+endif
+ifeq ($(PBIO_PLATFORM),)
+$(error "PBIO_PLATFORM is not specified - add it in <hub>/Makefile)
+endif
 
 # ensure required git submodules checked out
 ifeq ("$(wildcard $(PBTOP)/micropython/README.md)","")
@@ -26,27 +37,11 @@ ifeq ("$(wildcard $(PBTOP)/micropython/lib/stm32lib/README.md)","")
 $(error failed)
 endif
 endif
-ifeq ("$(wildcard $(PBTOP)/lib/libfixmath/README.md)","")
-$(info GIT cloning libfixmath submodule)
-$(info $(shell cd $(PBTOP) && git submodule update --init lib/libfixmath))
-ifeq ("$(wildcard $(PBTOP)/lib/libfixmath/README.md)","")
-$(error failed)
-endif
-endif
 ifeq ($(PB_LIB_BTSTACK),1)
 ifeq ("$(wildcard ../../lib/btstack/README.md)","")
 $(info GIT cloning btstack submodule)
 $(info $(shell cd ../.. && git submodule update --checkout --init lib/btstack))
 ifeq ("$(wildcard ../../lib/btstack/README.md)","")
-$(error failed)
-endif
-endif
-endif
-ifeq ($(PB_LIB_LITTLEFS),1)
-ifeq ("$(wildcard ../../lib/littlefs/README.md)","")
-$(info GIT cloning littlefs submodule)
-$(info $(shell cd ../.. && git submodule update --checkout --init lib/littlefs))
-ifeq ("$(wildcard ../../lib/littlefs/README.md)","")
 $(error failed)
 endif
 endif
@@ -58,29 +53,13 @@ USER_C_MODULES = $(PBTOP)
 include ../../micropython/py/mkenv.mk
 
 # qstr definitions (must come before including py.mk)
-QSTR_DEFS = ../pybricks_qstrdefs.h
-QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/primehub_spike-rt/configport.h
-
-# MicroPython feature configurations
-MICROPY_ROM_TEXT_COMPRESSION ?= 1
+#QSTR_DEFS = ../_common/qstrdefs.h
+#QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/_common_stm32/mpconfigport.h
 
 # include py core make definitions
 include $(TOP)/py/py.mk
 
 CROSS_COMPILE ?= arm-none-eabi-
-
-# Bricks must specify the following variables in their Makefile
-ifeq ($(PB_MCU_SERIES),)
-$(error "PB_MCU_SERIES is not specified - add it in <hub>/Makefile)
-else
-PB_MCU_SERIES_LCASE = $(subst F,f,$(subst L,l,$(PB_MCU_SERIES)))
-endif
-ifeq ($(PB_CMSIS_MCU),)
-$(error "PB_CMSIS_MCU is not specified - add it in <hub>/Makefile")
-endif
-ifeq ($(PBIO_PLATFORM),)
-$(error "PBIO_PLATFORM is not specified - add it in <hub>/Makefile)
-endif
 
 INC += -I.
 INC += -I$(TOP)
@@ -89,13 +68,9 @@ INC += -I$(TOP)/lib/stm32lib/CMSIS/STM32$(PB_MCU_SERIES)xx/Include
 ifeq ($(PB_USE_HAL),1)
 INC += -I$(TOP)/lib/stm32lib/STM32$(PB_MCU_SERIES)xx_HAL_Driver/Inc
 endif
-#INC += -I$(ASP3TOP)/arch/gcc
-#INC += -I$(ASP3TOP)/include
-#INC += -I$(ASP3TOP)/target/primehub_gcc
-INC += -I$(PBTOP)/lib/asp3/
 INC += -I$(PBTOP)/lib/contiki-core
+INC += -I$(PBTOP)/lib/asp3 # TODO: include from ASP3TOP
 INC += -I$(PBTOP)/lib/lego
-INC += -I$(PBTOP)/lib/libfixmath/libfixmath
 INC += -I$(PBTOP)/lib/lwrb/src/include
 INC += -I$(PBTOP)/lib/pbio/include
 INC += -I$(PBTOP)/lib/pbio/platform/$(PBIO_PLATFORM)
@@ -110,9 +85,6 @@ ifeq ($(PB_LIB_BTSTACK),1)
 INC += -I$(PBTOP)/lib/btstack/chipset/cc256x
 INC += -I$(PBTOP)/lib/btstack/src
 endif
-ifeq ($(PB_LIB_LITTLEFS),1)
-INC += -I$(PBTOP)/lib/littlefs
-endif
 ifeq ($(PB_USE_LSM6DS3TR_C),1)
 INC += -I$(PBTOP)/lib/lsm6ds3tr_c_STdC/driver
 endif
@@ -125,10 +97,7 @@ INC += -I$(BUILD)
 
 GIT = git
 
-CFLAGS_MCU_F0 = -mthumb -mtune=cortex-m0 -mcpu=cortex-m0  -msoft-float
 CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-#CFLAGS_MCU_F4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4  -msoft-float
-CFLAGS_MCU_L4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-maybe-uninitialized
 CFLAGS = $(INC) -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU_$(PB_MCU_SERIES)) $(CFLAGS_WARN) $(COPT) $(CFLAGS_EXTRA)
 $(BUILD)/lib/libm/%.o: CFLAGS += -Wno-sign-compare
@@ -141,15 +110,20 @@ CFLAGS += -DPYBRICKS_ON_ASP3
 # define external oscillator frequency
 CFLAGS += -DHSE_VALUE=$(PB_MCU_EXT_OSC_HZ)
 
+SUPPORTS_HARDWARE_FP_SINGLE = 0
+ifeq ($(PB_MCU_SERIES),$(filter $(PB_MCU_SERIES),F4 L4))
+SUPPORTS_HARDWARE_FP_SINGLE = 1
+endif
+
 # avoid doubles
 CFLAGS += -fsingle-precision-constant -Wdouble-promotion
 
 # Tune for Debugging or Optimization
 ifeq ($(DEBUG), 1)
-CFLAGS += -O0 -ggdb
+CFLAGS += -Og -ggdb
 else
-CFLAGS += -Os -g
-# CFLAGS += -Os -DNDEBUG
+CFLAGS += -Os -DNODEBUG
+#CFLAGS += -Os -DNDEBUG -flto
 CFLAGS += -fdata-sections -ffunction-sections
 endif
 
@@ -159,14 +133,24 @@ CFLAGS += -D$(PB_CMSIS_MCU)
 CFLAGS += -DSTM32_H='<stm32$(PB_MCU_SERIES_LCASE)xx.h>'
 CFLAGS += -DSTM32_HAL_H='<stm32$(PB_MCU_SERIES_LCASE)xx_hal.h>'
 
-MPY_CROSS = ../../micropython/mpy-cross/mpy-cross
-
 LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
-SRC_C = $(addprefix bricks/primehub_spike-rt/,\
+# Sources and libraries common to all pybricks bricks
+
+include ./sources.mk
+
+# Embedded MicroPython sources
+
+PY_STM32_SRC_C = $(addprefix bricks/,\
+	_common/micropython.c \
+	_common_stm32/mphalport.c \
+	)
+
+SPIKE_RT_SRC_C = $(addprefix bricks/primehub_spike-rt/,\
 	main.c \
 	mphalport.c \
 	)
+
 
 # Extra core MicroPython files
 
@@ -176,7 +160,8 @@ SRC_C = $(addprefix bricks/primehub_spike-rt/,\
 # if we don't do it this way. So we need to be very careful about name clashes
 # between the top level directory and the micropython/ subdirectory.
 
-SRC_C += $(addprefix shared/,\
+PY_EXTRA_SRC_C = $(addprefix shared/,\
+	libc/string0.c \
 	readline/readline.c \
 	runtime/gchelper_native.c \
 	runtime/interrupt_char.c \
@@ -185,84 +170,14 @@ SRC_C += $(addprefix shared/,\
 	runtime/sys_stdio_mphal.c \
 	)
 
+SRC_S = \
+	lib/pbio/platform/$(PBIO_PLATFORM)/startup.s \
+
 ifeq ($(PB_MCU_SERIES),F0)
 	SRC_S += shared/runtime/gchelper_m0.s
 else
 	SRC_S += shared/runtime/gchelper_m3.s
 endif
-
-# Pybricks modules
-
-PYBRICKS_PYBRICKS_SRC_C = $(addprefix pybricks/,\
-	common/pb_type_battery.c \
-	common/pb_type_charger.c \
-	common/pb_type_colorlight_external.c \
-	common/pb_type_colorlight_internal.c \
-	common/pb_type_control.c \
-	common/pb_type_dcmotor.c \
-	common/pb_type_imu.c \
-	common/pb_type_keypad.c \
-	common/pb_type_lightarray.c \
-	common/pb_type_lightmatrix_fonts.c \
-	common/pb_type_lightmatrix.c \
-	common/pb_type_logger.c \
-	common/pb_type_motor.c \
-	common/pb_type_speaker.c \
-	common/pb_type_system.c \
-	experimental/pb_module_experimental.c \
-	geometry/pb_module_geometry.c \
-	geometry/pb_type_matrix.c \
-	hubs/pb_module_hubs.c \
-	hubs/pb_type_cityhub.c \
-	hubs/pb_type_essentialhub.c \
-	hubs/pb_type_technichub.c \
-	hubs/pb_type_movehub.c \
-	hubs/pb_type_primehub.c \
-	iodevices/pb_module_iodevices.c \
-	iodevices/pb_type_iodevices_analogsensor.c \
-	iodevices/pb_type_iodevices_ev3devsensor.c \
-	iodevices/pb_type_iodevices_i2cdevice.c \
-	iodevices/pb_type_iodevices_lumpdevice.c \
-	iodevices/pb_type_iodevices_lwp3device.c \
-	iodevices/pb_type_iodevices_pupdevice.c \
-	iodevices/pb_type_iodevices_uartdevice.c \
-	media/pb_module_media.c \
-	parameters/pb_type_icon.c \
-	parameters/pb_module_parameters.c \
-	parameters/pb_type_button.c \
-	parameters/pb_type_color.c \
-	parameters/pb_type_direction.c \
-	parameters/pb_type_port.c \
-	parameters/pb_type_side.c \
-	parameters/pb_type_stop.c \
-	pupdevices/pb_module_pupdevices.c \
-	pupdevices/pb_type_pupdevices_colordistancesensor.c \
-	pupdevices/pb_type_pupdevices_colorlightmatrix.c \
-	pupdevices/pb_type_pupdevices_colorsensor.c \
-	pupdevices/pb_type_pupdevices_forcesensor.c \
-	pupdevices/pb_type_pupdevices_infraredsensor.c \
-	pupdevices/pb_type_pupdevices_light.c \
-	pupdevices/pb_type_pupdevices_pfmotor.c \
-	pupdevices/pb_type_pupdevices_remote.c \
-	pupdevices/pb_type_pupdevices_tiltsensor.c \
-	pupdevices/pb_type_pupdevices_ultrasonicsensor.c \
-	pybricks.c \
-	robotics/pb_module_robotics.c \
-	robotics/pb_type_drivebase.c \
-	robotics/pb_type_spikebase.c \
-	tools/pb_module_tools.c \
-	tools/pb_type_stopwatch.c \
-	util_mp/pb_obj_helper.c \
-	util_mp/pb_type_enum.c \
-	util_pb/pb_color_map.c \
-	util_pb/pb_conversions.c \
-	util_pb/pb_device_stm32.c \
-	util_pb/pb_error.c \
-	util_pb/pb_flash.c \
-	util_pb/pb_imu.c \
-	util_pb/pb_task.c \
-	)
-
 
 # STM32 Bluetooth stack
 
@@ -328,26 +243,7 @@ BTSTACK_SRC_C += $(addprefix lib/btstack/chipset/cc256x/,\
 	btstack_chipset_cc256x.c \
 	)
 
-# Littlefs
-
-LITTLEFS_SRC_C = $(addprefix lib/littlefs/,\
-	lfs_util.c \
-	lfs.c \
-	)
-
-# Contiki
-
-CONTIKI_SRC_C = $(addprefix lib/contiki-core/,\
-	lib/list.c \
-	lib/memb.c \
-	lib/ringbuf.c \
-	sys/autostart.c \
-	sys/etimer.c \
-	sys/process.c \
-	sys/timer.c \
-	)
-
-# STM32
+# STM32 HAL
 
 COPT += -DUSE_FULL_LL_DRIVER
 
@@ -358,6 +254,8 @@ HAL_SRC_C = $(addprefix lib/stm32lib/STM32$(PB_MCU_SERIES)xx_HAL_Driver/Src/,\
 	stm32$(PB_MCU_SERIES_LCASE)xx_hal_dac_ex.c \
 	stm32$(PB_MCU_SERIES_LCASE)xx_hal_dac.c \
 	stm32$(PB_MCU_SERIES_LCASE)xx_hal_dma.c \
+	stm32$(PB_MCU_SERIES_LCASE)xx_hal_flash.c \
+	stm32$(PB_MCU_SERIES_LCASE)xx_hal_flash_ex.c \
 	stm32$(PB_MCU_SERIES_LCASE)xx_hal_fmpi2c.c \
 	stm32$(PB_MCU_SERIES_LCASE)xx_hal_gpio.c \
 	stm32$(PB_MCU_SERIES_LCASE)xx_hal_i2c.c \
@@ -394,145 +292,9 @@ HAL_SRC_C := $(filter-out %xx_hal_pcd.c, $(HAL_SRC_C))
 HAL_SRC_C := $(filter-out %xx_ll_usb.c, $(HAL_SRC_C))
 endif
 
-# Ring buffer
-
-LWRB_SRC_C = lib/lwrb/src/lwrb/lwrb.c
-
-# libfixmath
-
-COPT += -DFIXMATH_NO_CTYPE
-
-LIBFIXMATH_SRC_C = $(addprefix lib/libfixmath/libfixmath/,\
-	fix16_sqrt.c \
-	fix16_str.c \
-	fix16.c \
-	uint32.c \
-	)
-
-# Pybricks I/O library
-
-PBIO_SRC_C = $(addprefix lib/pbio/,\
-	drv/adc/adc_stm32_hal.c \
-	drv/adc/adc_stm32f0.c \
-	drv/battery/battery_adc.c \
-	drv/bluetooth/bluetooth_btstack_control_gpio.c \
-	drv/bluetooth/bluetooth_btstack_run_loop_contiki.c \
-	drv/bluetooth/bluetooth_btstack_uart_block_stm32_hal.c \
-	drv/bluetooth/bluetooth_btstack.c \
-	drv/bluetooth/bluetooth_init_cc2564C_1.4.c \
-	drv/bluetooth/bluetooth_stm32_bluenrg.c \
-	drv/bluetooth/bluetooth_stm32_cc2640.c \
-	drv/bluetooth/pybricks_service_server.c \
-	drv/button/button_gpio.c \
-	drv/button/button_resistor_ladder.c \
-	drv/charger/charger_mp2639a.c \
-	drv/clock/clock_stm32.c \
-	drv/clock/clock_asp3.c \
-	drv/core.c \
-	drv/counter/counter_core.c \
-	drv/counter/counter_lpf2.c \
-	drv/counter/counter_stm32f0_gpio_quad_enc.c \
-	drv/gpio/gpio_stm32f0.c \
-	drv/gpio/gpio_stm32f4.c \
-	drv/gpio/gpio_stm32l4.c \
-	drv/ioport/ioport_lpf2.c \
-	drv/led/led_array_pwm.c \
-	drv/led/led_array.c \
-	drv/led/led_core.c \
-	drv/led/led_dual.c \
-	drv/led/led_pwm.c \
-	drv/motor_driver/motor_driver_hbridge_pwm.c \
-	drv/pwm/pwm_core.c \
-	drv/pwm/pwm_lp50xx_stm32.c \
-	drv/pwm/pwm_stm32_tim.c \
-	drv/pwm/pwm_tlc5955_stm32.c \
-	drv/reset/reset_stm32.c \
-	drv/resistor_ladder/resistor_ladder.c \
-	drv/sound/sound_stm32_hal_dac.c \
-	drv/uart/uart_stm32f0.c \
-	drv/uart/uart_stm32f4_ll_irq.c \
-	drv/uart/uart_stm32l4_ll_dma.c \
-	drv/usb/usb_stm32.c \
-	drv/usb/usb_stm32_serial.c \
-	drv/watchdog/watchdog_stm32.c \
-	platform/$(PBIO_PLATFORM)/platform.c \
-	platform/$(PBIO_PLATFORM)/sys.c \
-	src/angle.c \
-	src/battery.c \
-	src/color/conversion.c \
-	src/control.c \
-	src/control_settings.c \
-	src/dcmotor.c \
-	src/drivebase.c \
-	src/error.c \
-	src/integrator.c \
-	src/iodev.c \
-	src/light/animation.c \
-	src/light/color_light.c \
-	src/light/light_matrix.c \
-	src/logger.c \
-	src/main.c \
-	src/math.c \
-	src/motor_process.c \
-	src/motor/servo_settings.c \
-	src/observer.c \
-	src/parent.c \
-	src/protocol/lwp3.c \
-	src/protocol/nus.c \
-	src/protocol/pybricks.c \
-	src/servo.c \
-	src/tacho.c \
-	src/task.c \
-	src/trajectory.c \
-	src/uartdev.c \
-	src/util.c \
-	sys/battery.c \
-	sys/bluetooth.c \
-	sys/command.c \
-	sys/hmi.c \
-	sys/io_ports.c \
-	sys/light_matrix.c \
-	sys/light.c \
-	sys/main.c \
-	sys/status.c \
-	sys/supervisor.c \
-	sys/user_program.c \
-	)
-
 # STM32 IMU Library
 
 LSM6DS3TR_C_SRC_C = lib/lsm6ds3tr_c_STdC/driver/lsm6ds3tr_c_reg.c
-
-# MicroPython math library
-
-SRC_LIBM = $(addprefix lib/libm/,\
-	acoshf.c \
-	asinfacosf.c \
-	asinhf.c \
-	atan2f.c \
-	atanf.c \
-	atanhf.c \
-	ef_rem_pio2.c \
-	ef_sqrt.c \
-	erf_lgamma.c \
-	fmodf.c \
-	kf_cos.c \
-	kf_rem_pio2.c \
-	kf_sin.c \
-	kf_tan.c \
-	log1pf.c \
-	math.c \
-	nearbyintf.c \
-	sf_cos.c \
-	sf_erf.c \
-	sf_frexp.c \
-	sf_ldexp.c \
-	sf_modf.c \
-	sf_sin.c \
-	sf_tan.c \
-	wf_lgamma.c \
-	wf_tgamma.c \
-	)
 
 # STM32 USB Device library
 
@@ -552,8 +314,13 @@ SRC_STM32_USB_DEV += $(addprefix lib/pbio/drv/usb/stm32_usbd/,\
 	usbd_desc.c \
 	)
 
-OBJ = $(PY_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o) $(SRC_S:.s=.o))
-OBJ += $(addprefix $(BUILD)/, $(PYBRICKS_PYBRICKS_SRC_C:.c=.o))
+OBJ = 
+#OBJ = $(PY_O)
+#OBJ += $(addprefix $(BUILD)/, $(PY_EXTRA_SRC_C:.c=.o))
+#OBJ += $(addprefix $(BUILD)/, $(PY_STM32_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(SPIKE_RT_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(SRC_S:.s=.o))
+#OBJ += $(addprefix $(BUILD)/, $(PYBRICKS_PYBRICKS_SRC_C:.c=.o))
 ifeq ($(PB_LIB_BLUENRG),1)
 OBJ += $(addprefix $(BUILD)/, $(BLUENRG_SRC_C:.c=.o))
 endif
@@ -563,10 +330,6 @@ endif
 ifeq ($(PB_LIB_BTSTACK),1)
 OBJ += $(addprefix $(BUILD)/, $(BTSTACK_SRC_C:.c=.o))
 endif
-ifeq ($(PB_LIB_LITTLEFS),1)
-CFLAGS+= -DLFS_NO_ASSERT -DLFS_NO_MALLOC -DLFS_NO_DEBUG -DLFS_NO_WARN -DLFS_NO_ERROR
-OBJ += $(addprefix $(BUILD)/, $(LITTLEFS_SRC_C:.c=.o))
-endif
 ifeq ($(PB_USE_HAL),1)
 OBJ += $(addprefix $(BUILD)/, $(HAL_SRC_C:.c=.o))
 endif
@@ -574,7 +337,6 @@ ifeq ($(PB_USE_LSM6DS3TR_C),1)
 OBJ += $(addprefix $(BUILD)/, $(LSM6DS3TR_C_SRC_C:.c=.o))
 endif
 OBJ += $(addprefix $(BUILD)/, $(CONTIKI_SRC_C:.c=.o))
-OBJ += $(addprefix $(BUILD)/, $(LIBFIXMATH_SRC_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(LWRB_SRC_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(PBIO_SRC_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_LIBM:.c=.o))
@@ -583,11 +345,15 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_STM32_USB_DEV:.c=.o))
 endif
 
 # List of sources for qstr extraction
-SRC_QSTR += $(SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
+#SRC_QSTR += $(PY_EXTRA_SRC_C) 
+#SRC_QSTR += $(PY_STM32_SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
 # Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
-all: libpybricks.a
+# Main firmware build targets
+TARGETS := $(BUILD)/libpybricks.a
+
+all: $(TARGETS)
 
 # handle BTStack .gatt files
 
@@ -606,6 +372,8 @@ $(BUILD)/genhdr/%.h: $(PBTOP)/lib/pbio/drv/bluetooth/%.gatt
 
 endif
 
+FW_VERSION := $(shell $(GIT) describe --tags --dirty --always --exclude "@pybricks/*")
+
 .PHONY: libpybricks.a
 libpybricks.a: $(BUILD)/libpybricks.a
 
@@ -613,7 +381,5 @@ $(BUILD)/libpybricks.a: $(OBJ)
 	$(ECHO) "LINK $@"
 	$(ECHO) "OBJ    = $(OBJ)"
 	$(Q)$(AR) rcs $@ $(OBJ)
-
-#$(RANLIB) $@
 
 include $(TOP)/py/mkrules.mk

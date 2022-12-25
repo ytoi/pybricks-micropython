@@ -15,6 +15,10 @@
 
 #include <contiki.h>
 
+#if PBDRV_ON_ASP3
+#include <kernel.h>
+#endif
+
 #include "../core.h"
 #include "block_device_w25qxx_stm32.h"
 
@@ -522,8 +526,13 @@ void pbdrv_block_device_init(void) {
     bdev.tx_dma.Init.MemBurst = DMA_MBURST_SINGLE;
     bdev.tx_dma.Init.PeriphBurst = DMA_PBURST_SINGLE;
     HAL_DMA_Init(&bdev.tx_dma);
+    #if PBDRV_ON_ASP3
+    // The priority is initialized in pybricks.cfg
+    ena_int(bdev.pdata->tx_dma_irq + 16);
+    #else
     HAL_NVIC_SetPriority(bdev.pdata->tx_dma_irq, 5, 0);
     HAL_NVIC_EnableIRQ(bdev.pdata->tx_dma_irq);
+    #endif
     __HAL_LINKDMA(&bdev.hspi, hdmatx, bdev.tx_dma);
 
     bdev.rx_dma.Instance = bdev.pdata->rx_dma;
@@ -539,8 +548,13 @@ void pbdrv_block_device_init(void) {
     bdev.rx_dma.Init.MemBurst = DMA_MBURST_SINGLE;
     bdev.rx_dma.Init.PeriphBurst = DMA_PBURST_SINGLE;
     HAL_DMA_Init(&bdev.rx_dma);
+    #if PBDRV_ON_ASP3
+    // The priority is initialized in pybricks.cfg
+    ena_int(bdev.pdata->rx_dma_irq + 16);
+    #else
     HAL_NVIC_SetPriority(bdev.pdata->rx_dma_irq, 5, 0);
     HAL_NVIC_EnableIRQ(bdev.pdata->rx_dma_irq);
+    #endif
     __HAL_LINKDMA(&bdev.hspi, hdmarx, bdev.rx_dma);
 
     bdev.hspi.Instance = bdev.pdata->spi;
@@ -553,8 +567,13 @@ void pbdrv_block_device_init(void) {
     bdev.hspi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
     bdev.hspi.Init.FirstBit = SPI_FIRSTBIT_MSB;
     HAL_SPI_Init(&bdev.hspi);
+    #if PBDRV_ON_ASP3
+    // The priority is initialized in pybricks.cfg
+    ena_int(bdev.pdata->irq + 16);
+    #else
     HAL_NVIC_SetPriority(bdev.pdata->irq, 6, 2);
     HAL_NVIC_EnableIRQ(bdev.pdata->irq);
+    #endif
 
     pbdrv_init_busy_up();
     process_start(&pbdrv_block_device_w25qxx_stm32_init_process);

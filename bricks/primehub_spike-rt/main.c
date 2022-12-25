@@ -1,39 +1,25 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2022 The Pybricks Authors
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//                    Graduate School of Information Science, Nagoya Univ., JAPAN
+
+#include <pbsys/config.h>
+
+#if PBSYS_CONFIG_SPIKE_RT_MAIN
 
 #include <stdint.h>
-#include <stdio.h>
-#include <string.h>
 
-#include <contiki.h>
-
-#include <pbio/button.h>
+#include <pbdrv/reset.h>
+#include <pbdrv/usb.h>
 #include <pbio/main.h>
+#include <pbsys/core.h>
 #include <pbsys/main.h>
-#include <pbsys/user_program.h>
+#include <pbsys/status.h>
 
-#include <pybricks/common.h>
-#include <pybricks/util_mp/pb_obj_helper.h>
-#include <pybricks/util_pb/pb_flash.h>
+#include <pbsys/program_stop.h>
+#include <pbsys/bluetooth.h>
 
-#include "shared/readline/readline.h"
-#include "shared/runtime/gchelper.h"
-#include "shared/runtime/interrupt_char.h"
-#include "shared/runtime/pyexec.h"
-#include "py/builtin.h"
-#include "py/compile.h"
-#include "py/gc.h"
-#include "py/mperrno.h"
-#include "py/mphal.h"
-#include "py/persistentcode.h"
-#include "py/repl.h"
-#include "py/runtime.h"
-#include "py/stackctrl.h"
-#include "py/stream.h"
-
-
-// Implementation for MICROPY_EVENT_POLL_HOOK
-void pb_stm32_poll(void) {
+void pb_poll(void) {
     while (pbio_do_one_event()) {
     }
 
@@ -41,42 +27,59 @@ void pb_stm32_poll(void) {
     slp_pybricks();
 }
 
-static void stm32_main(void) {
-    while(1){
-      pb_stm32_poll();
-    }
-}
-
+/**
+ * Initializes the PBIO library, runs custom main program, and handles shutdown.
+ *
+ * @param [in]  main    The main program.
+ */
 int main(int argc, char **argv) {
-    pbsys_main(stm32_main);
-    return 0;
-}
 
-void gc_collect(void) {
-    gc_collect_start();
-    gc_helper_collect_regs_and_stack();
-    gc_collect_end();
-}
+    pbio_init();
+    pbsys_init();
+    // Needed to avoid a light animation assert error after a shutdown is requested.
+    pbio_stop_all(true);
 
-mp_lexer_t *mp_lexer_new_from_file(const char *filename) {
-    mp_raise_OSError(MP_ENOENT);
-}
+    // Prepare pbsys for running the program.
+    pbsys_status_set(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING);
+    pbsys_bluetooth_rx_set_callback(NULL);
+  
 
-void mp_reader_new_file(mp_reader_t *reader, const char *filename) {
-    mp_raise_OSError(MP_ENOENT);
-}
+    // Keep loading and running user programs until shutdown is requested.
+    while (!pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN_REQUEST)) {
+        // Run Contiki Processes.
+        // Get system back in idle state.
+        pb_poll();
+    }
+    
+    pbsys_status_clear(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING);
+    pbsys_bluetooth_rx_set_callback(NULL);
+    pbio_stop_all(true);
 
-mp_import_stat_t mp_import_stat(const char *path) {
-    return MP_IMPORT_STAT_NO_EXIST;
-}
+    // Stop system processes and save user data before we shutdown.
+    pbsys_deinit();
 
-mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) {
-    mp_raise_OSError(MP_ENOENT);
-}
-MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_open_obj, 1, mp_builtin_open);
+    // Now lower-level processes may shutdown and/or power off.
+    pbsys_status_set(PBIO_PYBRICKS_STATUS_SHUTDOWN);
 
-void nlr_jump_fail(void *val) {
-    while (1) {
-        ;
+    // The power could be held on due to someone pressing the center button
+    // or USB being plugged in, so we have this loop to keep pumping events
+    // to turn off most of the peripherals and keep the battery charger running.
+    for (;;) {
+        // We must handle all pending events before turning the power off the
+        // first time, otherwise the city hub turns itself back on sometimes.
+        pb_poll();
+
+        #if PBSYS_CONFIG_BATTERY_CHARGER
+        // On hubs with USB battery chargers, we can't turn off power while
+        // USB is connected, otherwise it disables the op-amp that provides
+        // the battery voltage to the ADC.
+        if (pbdrv_usb_get_bcd() != PBDRV_USB_BCD_NONE) {
+            continue;
+        }
+        #endif
+
+        pbdrv_reset_power_off();
     }
 }
+
+#endif // PBSYS_CONFIG_SPIKE_RT_MAIN

@@ -1,26 +1,32 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2019-2021 The Pybricks Authors
+// Copyright (c) 2019-2022 The Pybricks Authors
+// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+//            Graduate School of Information Science, Nagoya Univ., JAPAN
 
 #include <stdbool.h>
 
 #include <btstack_chipset_cc256x.h>
 #undef UNUSED
-
 #include <stm32f4xx_hal.h>
 
-#include "pbio/uartdev.h"
-#include "pbio/light_matrix.h"
+#include "pbdrv/config.h"
 
 #if PBDRV_ON_ASP3
 #include <kernel.h>
 #endif
 
+#include <pbdrv/clock.h>
+#include "pbio/uartdev.h"
+#include "pbio/light_matrix.h"
+
 #include "../../drv/adc/adc_stm32_hal.h"
+#include "../../drv/block_device/block_device_w25qxx_stm32.h"
 #include "../../drv/bluetooth/bluetooth_btstack_control_gpio.h"
 #include "../../drv/bluetooth/bluetooth_btstack_uart_block_stm32_hal.h"
 #include "../../drv/bluetooth/bluetooth_btstack.h"
 #include "../../drv/charger/charger_mp2639a.h"
 #include "../../drv/counter/counter_lpf2.h"
+#include "../../drv/imu/imu_lsm6ds3tr_c_stm32.h"
 #include "../../drv/ioport/ioport_lpf2.h"
 #include "../../drv/led/led_array_pwm.h"
 #include "../../drv/led/led_dual.h"
@@ -38,8 +44,10 @@ enum {
     COUNTER_PORT_B,
     COUNTER_PORT_C,
     COUNTER_PORT_D,
+#if PBDRV_CONFIG_HAS_PORT_E
     COUNTER_PORT_E,
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#endif
+#if PBDRV_CONFIG_HAS_PORT_F
     COUNTER_PORT_F,
 #endif
 };
@@ -76,8 +84,10 @@ enum {
     UART_PORT_B,
     UART_PORT_C,
     UART_PORT_D,
+#if PBDRV_CONFIG_HAS_PORT_E
     UART_PORT_E,
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#endif
+#if PBDRV_CONFIG_HAS_PORT_F
     UART_PORT_F,
 #endif
 };
@@ -173,17 +183,78 @@ const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_
         .counter_id = COUNTER_PORT_D,
         .port_id = PBIO_PORT_ID_D,
     },
+#if PBDRV_CONFIG_HAS_PORT_E
     [COUNTER_PORT_E] = {
         .counter_id = COUNTER_PORT_E,
         .port_id = PBIO_PORT_ID_E,
     },
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#endif
+#if PBDRV_CONFIG_HAS_PORT_F
     [COUNTER_PORT_F] = {
         .counter_id = COUNTER_PORT_F,
         .port_id = PBIO_PORT_ID_F,
     },
 #endif
 };
+
+// IMU
+
+const pbdrv_imu_lsm6s3tr_c_stm32_platform_data_t pbdrv_imu_lsm6s3tr_c_stm32_platform_data = {
+    .i2c = I2C2,
+};
+
+void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
+    GPIO_InitTypeDef gpio_init;
+
+    // IMU
+    if (hi2c->Instance == I2C2) {
+        gpio_init.Pull = GPIO_NOPULL;
+        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+
+        // SCL
+        gpio_init.Pin = GPIO_PIN_10;
+
+        // do a quick bus reset in case IMU chip is in bad state
+        gpio_init.Mode = GPIO_MODE_OUTPUT_OD;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+
+        for (int i = 0; i < 10; i++) {
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+            pbdrv_clock_delay_us(1);
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+            pbdrv_clock_delay_us(1);
+        }
+
+        // then configure for normal use
+        gpio_init.Mode = GPIO_MODE_AF_OD;
+        gpio_init.Alternate = GPIO_AF4_I2C2;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+
+        // SDA
+        gpio_init.Pin = GPIO_PIN_3;
+        gpio_init.Alternate = GPIO_AF9_I2C2;
+        HAL_GPIO_Init(GPIOB, &gpio_init);
+
+#if PBDRV_ON_ASP3
+        // The priorities are initialized in pybricks.cfg
+        ena_int(I2C2_ER_IRQn + 16);
+        ena_int(I2C2_EV_IRQn + 16);
+#else
+        HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
+        HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
+        HAL_NVIC_SetPriority(I2C2_EV_IRQn, 3, 2);
+        HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
+#endif
+    }
+}
+
+void I2C2_ER_IRQHandler(void) {
+    pbdrv_imu_lsm6ds3tr_c_stm32_handle_i2c_er_irq();
+}
+
+void I2C2_EV_IRQHandler(void) {
+    pbdrv_imu_lsm6ds3tr_c_stm32_handle_i2c_ev_irq();
+}
 
 // I/O ports
 
@@ -226,6 +297,7 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
             .uart_rx = { .bank = GPIOD, .pin = 2  },
             .alt = GPIO_AF8_UART5,
         },
+#if PBDRV_CONFIG_HAS_PORT_E
         // Port E
         {
             .id1 = { .bank = GPIOC, .pin = 13 },
@@ -235,7 +307,8 @@ const pbdrv_ioport_lpf2_platform_data_t pbdrv_ioport_lpf2_platform_data = {
             .uart_rx = { .bank = GPIOE, .pin = 2  },
             .alt = GPIO_AF11_UART10,
         },
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#endif
+#if PBDRV_CONFIG_HAS_PORT_F
         // Port F
         {
             .id1 = { .bank = GPIOC, .pin = 11 },
@@ -331,7 +404,7 @@ const pbdrv_led_array_pwm_platform_data_t pbdrv_led_array_pwm_platform_data[PBDR
 };
 
 // Motor driver
-
+//TODO: invalidate motor drivers according to PBIO_CONFIG_PORT_NUM.
 const pbdrv_motor_driver_hbridge_pwm_platform_data_t
     pbdrv_motor_driver_hbridge_pwm_platform_data[PBDRV_CONFIG_MOTOR_DRIVER_NUM_DEV] = {
     // Port A
@@ -399,7 +472,7 @@ const pbdrv_motor_driver_hbridge_pwm_platform_data_t
         .pin2_pwm_id = PWM_DEV_1_TIM3,
         .pin2_pwm_ch = 2,
     },
-    // Port F TODO
+    // Port F
     {
         .pin1_gpio.bank = GPIOC,
         .pin1_gpio.pin = 8,
@@ -535,7 +608,6 @@ const pbdrv_pwm_stm32_tim_platform_data_t
     },
 };
 
-#if PBDRV_CONFIG_PWM_TLC5955_STM32
 const pbdrv_pwm_tlc5955_stm32_platform_data_t
     pbdrv_pwm_tlc5955_stm32_platform_data[PBDRV_CONFIG_PWM_TLC5955_STM32_NUM_DEV] = {
     {
@@ -552,7 +624,6 @@ const pbdrv_pwm_tlc5955_stm32_platform_data_t
         .id = PWM_DEV_5_TLC5955,
     },
 };
-#endif
 
 // Reset
 
@@ -624,11 +695,13 @@ const pbdrv_uart_stm32f4_ll_irq_platform_data_t
         .uart = UART5,
         .irq = UART5_IRQn,
     },
+#if PBDRV_CONFIG_HAS_PORT_E
     [UART_PORT_E] = {
         .uart = UART10,
         .irq = UART10_IRQn,
     },
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#endif
+#if PBDRV_CONFIG_HAS_PORT_F
     [UART_PORT_F] = {
         .uart = UART9,
         .irq = UART9_IRQn,
@@ -656,17 +729,19 @@ void UART8_IRQHandler(void) {
     pbdrv_uart_stm32f4_ll_irq_handle_irq(UART_PORT_C);
 }
 
+#if PBDRV_CONFIG_HAS_PORT_F
 // overrides weak function in setup.m
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
 void UART9_IRQHandler(void) {
     pbdrv_uart_stm32f4_ll_irq_handle_irq(UART_PORT_F);
 }
 #endif
 
+#if PBDRV_CONFIG_HAS_PORT_E
 // overrides weak function in setup.m
 void UART10_IRQHandler(void) {
     pbdrv_uart_stm32f4_ll_irq_handle_irq(UART_PORT_E);
 }
+#endif
 
 const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDEV_NUM_DEV] = {
     [COUNTER_PORT_A] = {
@@ -681,10 +756,12 @@ const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDE
     [COUNTER_PORT_D] = {
         .uart_id = UART_PORT_D,
     },
+#if PBDRV_CONFIG_HAS_PORT_E
     [COUNTER_PORT_E] = {
         .uart_id = UART_PORT_E,
     },
-#if !PBIO_CONFIG_USE_PORT_F_AS_ASP3_DEBUG_UART
+#endif
+#if PBDRV_CONFIG_HAS_PORT_F
     [COUNTER_PORT_F] = {
         .uart_id = UART_PORT_F,
     },
@@ -693,10 +770,18 @@ const pbio_uartdev_platform_data_t pbio_uartdev_platform_data[PBIO_CONFIG_UARTDE
 
 // STM32 HAL integration
 
-#if PBDRV_CONFIG_ADC
+#if 0
+// bootloader gives us 16MHz clock
+uint32_t SystemCoreClock = 16000000;
+
+// copied from system_stm32.c in stm32 port
+const uint8_t AHBPrescTable[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 6, 7, 8, 9 };
+const uint8_t APBPrescTable[8] = { 0, 0, 0, 0, 1, 2, 3, 4 };
+#endif
+
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
-    GPIO_InitTypeDef gpio_init = { 0 };
-    ADC_ChannelConfTypeDef adc_ch_config = { 0 };
+    GPIO_InitTypeDef gpio_init = { };
+    ADC_ChannelConfTypeDef adc_ch_config = { };
 
     // clocks are enabled in SystemInit
     assert_param(__HAL_RCC_TIM2_IS_CLK_ENABLED());
@@ -786,9 +871,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
 void DMA2_Stream0_IRQHandler(void) {
     pbdrv_adc_stm32_hal_handle_irq();
 }
-#endif
 
-#if PBDRV_CONFIG_PWM_TLC5955_STM32
 void DMA2_Stream2_IRQHandler(void) {
     pbdrv_pwm_tlc5955_stm32_rx_dma_irq(0);
 }
@@ -838,10 +921,56 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
 void SPI1_IRQHandler(void) {
     pbdrv_pwm_tlc5955_stm32_spi_irq(0);
 }
-#endif
+
+void SPI2_IRQHandler(void) {
+    pbdrv_block_device_w25qxx_stm32_spi_irq();
+}
+
+void DMA1_Stream4_IRQHandler(void) {
+    pbdrv_block_device_w25qxx_stm32_spi_handle_tx_dma_irq();
+}
+
+void DMA1_Stream3_IRQHandler(void) {
+    pbdrv_block_device_w25qxx_stm32_spi_handle_rx_dma_irq();
+}
+
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI2) {
+        pbdrv_block_device_w25qxx_stm32_spi_rx_complete();
+    }
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI1) {
+        pbdrv_pwm_tlc5955_stm32_spi_tx_complete();
+    } else if (hspi->Instance == SPI2) {
+        pbdrv_block_device_w25qxx_stm32_spi_tx_complete();
+    }
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI2) {
+        pbdrv_block_device_w25qxx_stm32_spi_error();
+    }
+}
+
+const pbdrv_block_device_w25qxx_stm32_platform_data_t pbdrv_block_device_w25qxx_stm32_platform_data = {
+    .tx_dma = DMA1_Stream4,
+    .tx_dma_ch = DMA_CHANNEL_0,
+    .tx_dma_irq = DMA1_Stream4_IRQn,
+    .rx_dma = DMA1_Stream3,
+    .rx_dma_ch = DMA_CHANNEL_0,
+    .rx_dma_irq = DMA1_Stream3_IRQn,
+    .spi = SPI2,
+    .irq = SPI2_IRQn,
+    .pin_ncs = {
+        .bank = GPIOB,
+        .pin = 12,
+    },
+};
 
 // USB
-#if PBDRV_CONFIG_USB_STM32F4
+
 void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     GPIO_InitTypeDef gpio_init;
 
@@ -859,29 +988,29 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
     gpio_init.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &gpio_init);
 
-    #if PBDRV_ON_ASP3
-    // TODO
+#if PBDRV_ON_ASP3
+    // The priorities are initialized in pybricks.cfg
     ena_int(OTG_FS_IRQn + 16);
     ena_int(EXTI9_5_IRQn + 16);
-    #else
+#else
     HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
     HAL_NVIC_SetPriority(EXTI9_5_IRQn, 6, 1);
     HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
-    #endif
+#endif
 
     // ensure correct inital state
     HAL_GPIO_EXTI_Callback(GPIO_PIN_9);
 }
 
 void HAL_PCD_MspDeInit(PCD_HandleTypeDef *hpcd) {
-    #if PBDRV_ON_ASP3
-    // TODO
+#if PBDRV_ON_ASP3
+    dis_int(EXTI9_5_IRQn + 16);
     dis_int(OTG_FS_IRQn + 16);
-    #else
+#else
     HAL_NVIC_DisableIRQ(EXTI9_5_IRQn);
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
-    #endif
+#endif
 }
 
 void OTG_FS_IRQHandler(void) {
@@ -897,48 +1026,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t pin) {
         pbdrv_usb_stm32_handle_vbus_irq(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9));
     }
 }
-#endif
-
-void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
-    GPIO_InitTypeDef gpio_init;
-
-    // IMU
-    if (hi2c->Instance == I2C2) {
-        gpio_init.Mode = GPIO_MODE_AF_OD;
-        gpio_init.Pull = GPIO_NOPULL;
-        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-
-        // SCL
-        gpio_init.Pin = GPIO_PIN_10;
-        gpio_init.Alternate = GPIO_AF4_I2C2;
-        HAL_GPIO_Init(GPIOB, &gpio_init);
-
-        // SDA
-        gpio_init.Pin = GPIO_PIN_3;
-        gpio_init.Alternate = GPIO_AF9_I2C2;
-        HAL_GPIO_Init(GPIOB, &gpio_init);
-
-        #if PBDRV_ON_ASP3
-        ena_int(I2C2_ER_IRQn + 16);
-        ena_int(I2C2_EV_IRQn + 16);
-        #else
-        HAL_NVIC_SetPriority(I2C2_ER_IRQn, 3, 1);
-        HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
-        HAL_NVIC_SetPriority(I2C2_EV_IRQn, 3, 2);
-        HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
-        #endif
-    }
-}
-
-void I2C2_ER_IRQHandler(void) {
-    extern void mod_experimental_IMU_handle_i2c_er_irq(void);
-    mod_experimental_IMU_handle_i2c_er_irq();
-}
-
-void I2C2_EV_IRQHandler(void) {
-    extern void mod_experimental_IMU_handle_i2c_ev_irq(void);
-    mod_experimental_IMU_handle_i2c_ev_irq();
-}
 
 // Early initialization
 
@@ -946,6 +1033,11 @@ void I2C2_EV_IRQHandler(void) {
 void pb_SystemInit(void) {
     // enable 8-byte stack alignment for IRQ handlers, in accord with EABI
     SCB->CCR |= SCB_CCR_STKALIGN_Msk;
+
+#if 0
+    // since the firmware starts at 0x08008000, we need to set the vector table offset
+    SCB->VTOR = (uint32_t)&_fw_isr_vector_src;
+#endif
 
     // bootloader disables interrupts
     __enable_irq();

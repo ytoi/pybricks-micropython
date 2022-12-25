@@ -153,13 +153,15 @@ PROCESS_THREAD(pbdrv_adc_process, ev, data) {
     #endif
 
     __HAL_LINKDMA(&pbdrv_adc_hadc, DMA_Handle, pbdrv_adc_hdma);
-    
+
     #if PBDRV_ON_ASP3
+    // The priority is initialized in pybricks.cfg
     ena_int(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ + 16);
     #else
     HAL_NVIC_SetPriority(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ, 7, 0);
     HAL_NVIC_EnableIRQ(PBDRV_CONFIG_ADC_STM32_HAL_DMA_IRQ);
     #endif
+
     HAL_ADC_Start_DMA(&pbdrv_adc_hadc, pbdrv_adc_dma_buffer, PBIO_ARRAY_SIZE(pbdrv_adc_dma_buffer));
     HAL_TIM_Base_Start(&pbdrv_adc_htim);
 
