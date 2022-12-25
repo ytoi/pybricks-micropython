@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2020 The Pybricks Authors
+// Copyright (c) 2020-2022 The Pybricks Authors
 
 #include "py/mpconfig.h"
 
@@ -8,23 +8,24 @@
 #include <math.h>
 #include <stdbool.h>
 
+#include <pbdrv/imu.h>
+#include <pbio/error.h>
+
 #include "py/obj.h"
 
 #include <pybricks/common.h>
 #include <pybricks/geometry.h>
 #include <pybricks/parameters.h>
-
-#include <pybricks/util_pb/pb_imu.h>
 #include <pybricks/util_pb/pb_error.h>
 #include <pybricks/util_mp/pb_kwarg_helper.h>
 
 typedef struct _common_IMU_obj_t {
     mp_obj_base_t base;
-    bool use_default_placement;
+    pbdrv_imu_dev_t *imu_dev;
     float hub_x[3];
     float hub_y[3];
     float hub_z[3];
-    pb_imu_dev_t *imu_dev;
+    bool use_default_placement;
 } common_IMU_obj_t;
 
 
@@ -46,15 +47,13 @@ STATIC mp_obj_t common_IMU_project_3d_axis(mp_obj_t axis_in, float *values) {
         return mp_obj_new_float_from_f(values[2]);
     }
 
-    // Argument must be a matrix
     if (!mp_obj_is_type(axis_in, &pb_type_Matrix)) {
-        pb_assert(PBIO_ERROR_INVALID_ARG);
+        mp_raise_TypeError(MP_ERROR_TEXT("axis must be Matrix or None"));
     }
     pb_type_Matrix_obj_t *axis = MP_OBJ_TO_PTR(axis_in);
 
-    // Axis must be 1x3 or 3x1
     if (axis->m * axis->n != 3) {
-        pb_assert(PBIO_ERROR_INVALID_ARG);
+        mp_raise_ValueError(MP_ERROR_TEXT("axis must be 1x3 or 3x1 matrix"));
     }
 
     // Project data onto user specified axis and scale user axis to unit length
@@ -86,11 +85,11 @@ STATIC mp_obj_t common_IMU_up(mp_obj_t self_in) {
     // So read +Z vector of the inertial frame, in the body frame.
     // For now, this is the gravity vector. In the future, we can make this
     // slightly more accurate by using the full IMU orientation.
-    float_t values[3];
-    pb_imu_accel_read(self->imu_dev, values);
+    float values[3];
+    pbdrv_imu_accel_read(self->imu_dev, values);
 
     // Find index and sign of maximum component
-    float_t abs_max = 0;
+    float abs_max = 0;
     uint8_t axis = 0;
     bool positive = false;
     for (uint8_t i = 0; i < 3; i++) {
@@ -133,8 +132,8 @@ STATIC mp_obj_t common_IMU_tilt(mp_obj_t self_in) {
 
     // Read acceleration in the user frame. In the future, we can make this
     // more accurate by using the full IMU orientation.
-    float_t accl[3];
-    pb_imu_accel_read(self->imu_dev, accl);
+    float accl[3];
+    pbdrv_imu_accel_read(self->imu_dev, accl);
     common_IMU_rotate_3d_axis(self, accl);
 
     mp_obj_t tilt[2];
@@ -155,8 +154,8 @@ STATIC mp_obj_t common_IMU_acceleration(size_t n_args, const mp_obj_t *pos_args,
         common_IMU_obj_t, self,
         PB_ARG_DEFAULT_NONE(axis));
 
-    float_t values[3];
-    pb_imu_accel_read(self->imu_dev, values);
+    float values[3];
+    pbdrv_imu_accel_read(self->imu_dev, values);
     common_IMU_rotate_3d_axis(self, values);
 
     return common_IMU_project_3d_axis(axis_in, values);
@@ -169,13 +168,20 @@ STATIC mp_obj_t common_IMU_angular_velocity(size_t n_args, const mp_obj_t *pos_a
         common_IMU_obj_t, self,
         PB_ARG_DEFAULT_NONE(axis));
 
-    float_t values[3];
-    pb_imu_gyro_read(self->imu_dev, values);
+    float values[3];
+    pbdrv_imu_gyro_read(self->imu_dev, values);
     common_IMU_rotate_3d_axis(self, values);
 
     return common_IMU_project_3d_axis(axis_in, values);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_IMU_angular_velocity_obj, 1, common_IMU_angular_velocity);
+
+// HACK: this is for testing and will be removed
+STATIC mp_obj_t common_IMU_temp(mp_obj_t self_in) {
+    common_IMU_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    return mp_obj_new_float_from_f(pbdrv_imu_temperature_read(self->imu_dev));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(common_IMU_temp_obj, common_IMU_temp);
 
 // dir(pybricks.common.IMU)
 STATIC const mp_rom_map_elem_t common_IMU_locals_dict_table[] = {
@@ -183,6 +189,8 @@ STATIC const mp_rom_map_elem_t common_IMU_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_tilt),             MP_ROM_PTR(&common_IMU_tilt_obj)            },
     { MP_ROM_QSTR(MP_QSTR_acceleration),     MP_ROM_PTR(&common_IMU_acceleration_obj)    },
     { MP_ROM_QSTR(MP_QSTR_angular_velocity), MP_ROM_PTR(&common_IMU_angular_velocity_obj)},
+    // HACK: this is for testing and will be removed
+    { MP_ROM_QSTR(MP_QSTR_temp), MP_ROM_PTR(&common_IMU_temp_obj)},
 };
 STATIC MP_DEFINE_CONST_DICT(common_IMU_locals_dict, common_IMU_locals_dict_table);
 
@@ -198,7 +206,7 @@ static void get_normal_axis(pb_type_Matrix_obj_t *vector, float *dest) {
 
     // Assert we have a vector with 3 entries
     if (vector->m * vector->n != 3) {
-        pb_assert(PBIO_ERROR_INVALID_ARG);
+        mp_raise_ValueError(MP_ERROR_TEXT("axis must be 1x3 or 3x1 matrix"));
     }
 
     // compute norm
@@ -209,7 +217,7 @@ static void get_normal_axis(pb_type_Matrix_obj_t *vector, float *dest) {
 
     // Assert we have a vector with nonzero length
     if (magnitude < 0.001f) {
-        pb_assert(PBIO_ERROR_INVALID_ARG);
+        mp_raise_ValueError(MP_ERROR_TEXT("axis must have nonzero length"));
     }
 
     // Scale and sign magnitude by matrix scale
@@ -231,9 +239,10 @@ mp_obj_t pb_type_IMU_obj_new(mp_obj_t top_side_axis, mp_obj_t front_side_axis) {
 
     // Initialized if not done so already
     if (!self->imu_dev) {
-        pb_imu_get_imu(&self->imu_dev);
-        pb_imu_init(self->imu_dev);
+        pbdrv_imu_dev_t *imu_dev;
+        pb_assert(pbdrv_imu_get_imu(&imu_dev));
         self->base.type = &pb_type_IMU;
+        self->imu_dev = imu_dev;
     }
 
     // Check if we use the default orientation.
@@ -253,7 +262,7 @@ mp_obj_t pb_type_IMU_obj_new(mp_obj_t top_side_axis, mp_obj_t front_side_axis) {
         // Assert that X and Z are orthogonal
         float inner = self->hub_x[0] * self->hub_z[0] + self->hub_x[1] * self->hub_z[1] + self->hub_x[2] * self->hub_z[2];
         if (inner > 0.001f || inner < -0.001f) {
-            pb_assert(PBIO_ERROR_INVALID_ARG);
+            mp_raise_ValueError(MP_ERROR_TEXT("X axis must be orthogonal to Z axis"));
         }
 
         // Make the body Y axis as Y = cross(Z, X)

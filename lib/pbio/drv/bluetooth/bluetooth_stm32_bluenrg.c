@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2021 The Pybricks Authors
+// Copyright (c) 2018-2022 The Pybricks Authors
 
 // Bluetooth for STM32 MCU with STMicro BlueNRG-MS
 
@@ -22,6 +22,8 @@
 #include <pbio/task.h>
 #include <pbio/util.h>
 #include <pbio/version.h>
+#include <pbsys/app.h>
+#include <pbsys/program_load.h>
 
 #include <contiki.h>
 #include <lego_lwp3.h>
@@ -94,7 +96,9 @@ static uint16_t remote_handle;
 static uint16_t remote_lwp3_char_handle;
 
 // Pybricks GATT service handles
-static uint16_t pybricks_service_handle, pybricks_char_handle;
+static uint16_t pybricks_service_handle;
+static uint16_t pybricks_command_event_char_handle;
+static uint16_t pybricks_hub_capabilities_char_handle;
 
 // Nordic UART GATT service handles
 static uint16_t uart_service_handle, uart_rx_char_handle, uart_tx_char_handle;
@@ -265,7 +269,7 @@ static PT_THREAD(set_discoverable(struct pt *pt, pbio_task_t *task)) {
     hci_le_set_scan_response_data_end();
 
     PT_WAIT_WHILE(pt, write_xfer_size);
-    aci_gap_set_discoverable_begin(ADV_IND, 0, 0, PUBLIC_ADDR, NO_WHITE_LIST_USE,
+    aci_gap_set_discoverable_begin(ADV_IND, 0, 0, STATIC_RANDOM_ADDR, NO_WHITE_LIST_USE,
         0, NULL, sizeof(service_uuids), service_uuids, 0, 0);
     PT_WAIT_UNTIL(pt, hci_command_complete);
     aci_gap_set_discoverable_end();
@@ -339,7 +343,7 @@ retry:
             goto done;
         }
         service_handle = pybricks_service_handle;
-        attr_handle = pybricks_char_handle;
+        attr_handle = pybricks_command_event_char_handle;
     } else if (send->connection == PBDRV_BLUETOOTH_CONNECTION_UART) {
         if (!uart_tx_notify_en) {
             goto done;
@@ -392,7 +396,7 @@ static PT_THREAD(scan_and_connect_task(struct pt *pt, pbio_task_t *task)) {
 
     // start scanning
     PT_WAIT_WHILE(pt, write_xfer_size);
-    aci_gap_start_general_conn_establish_proc_begin(ACTIVE_SCAN, 0x0030, 0x0030, PUBLIC_ADDR, 0);
+    aci_gap_start_general_conn_establish_proc_begin(ACTIVE_SCAN, 0x0030, 0x0030, STATIC_RANDOM_ADDR, 0);
     PT_WAIT_UNTIL(pt, hci_command_status);
     context->status = aci_gap_start_general_conn_establish_proc_end();
 
@@ -483,7 +487,7 @@ try_again:
 
     PT_WAIT_WHILE(pt, write_xfer_size);
     aci_gap_create_connection_begin(0x0060, 0x0030, context->bdaddr_type, context->bdaddr,
-        PUBLIC_ADDR, 0x0010 >> 1, 0x0030 >> 1, 4, 720 / 10, 0x0010, 0x0030);
+        STATIC_RANDOM_ADDR, 0x0010 >> 1, 0x0030 >> 1, 4, 720 / 10, 0x0010, 0x0030);
     PT_WAIT_UNTIL(pt, hci_command_status);
     context->status = aci_gap_create_connection_end();
 
@@ -807,24 +811,47 @@ static PT_THREAD(init_pybricks_service(struct pt *pt)) {
     };
 
     // c5f50002-8280-46da-89f4-6d8051e4aeef
-    static const uint8_t pybricks_char_uuid[] = {
+    static const uint8_t pybricks_command_event_char_uuid[] = {
         0xef, 0xae, 0xe4, 0x51, 0x80, 0x6d, 0xf4, 0x89,
         0xda, 0x46, 0x80, 0x82, 0x02, 0x00, 0xf5, 0xc5
+    };
+
+    // c5f50003-8280-46da-89f4-6d8051e4aeef
+    static const uint8_t pybricks_hub_capabilities_char_uuid[] = {
+        0xef, 0xae, 0xe4, 0x51, 0x80, 0x6d, 0xf4, 0x89,
+        0xda, 0x46, 0x80, 0x82, 0x03, 0x00, 0xf5, 0xc5
     };
 
     PT_BEGIN(pt);
 
     PT_WAIT_WHILE(pt, write_xfer_size);
-    aci_gatt_add_serv_begin(UUID_TYPE_128, pybricks_service_uuid, PRIMARY_SERVICE, 4);
+    aci_gatt_add_serv_begin(UUID_TYPE_128, pybricks_service_uuid, PRIMARY_SERVICE, 6);
     PT_WAIT_UNTIL(pt, hci_command_complete);
     aci_gatt_add_serv_end(&pybricks_service_handle);
 
     PT_WAIT_WHILE(pt, write_xfer_size);
-    aci_gatt_add_char_begin(pybricks_service_handle, UUID_TYPE_128, pybricks_char_uuid,
-        NUS_CHAR_SIZE, CHAR_PROP_WRITE_WITHOUT_RESP | CHAR_PROP_WRITE | CHAR_PROP_NOTIFY, ATTR_PERMISSION_NONE,
-        GATT_NOTIFY_ATTRIBUTE_WRITE, MIN_ENCRY_KEY_SIZE, CHAR_VALUE_LEN_VARIABLE);
+    aci_gatt_add_char_begin(pybricks_service_handle, UUID_TYPE_128, pybricks_command_event_char_uuid,
+        ATT_MTU - 3, CHAR_PROP_WRITE | CHAR_PROP_NOTIFY, ATTR_PERMISSION_NONE,
+        GATT_NOTIFY_WRITE_REQ_AND_WAIT_FOR_APPL_RESP, MIN_ENCRY_KEY_SIZE, CHAR_VALUE_LEN_VARIABLE);
     PT_WAIT_UNTIL(pt, hci_command_complete);
-    aci_gatt_add_char_end(&pybricks_char_handle);
+    aci_gatt_add_char_end(&pybricks_command_event_char_handle);
+
+    PT_WAIT_WHILE(pt, write_xfer_size);
+    aci_gatt_add_char_begin(pybricks_service_handle, UUID_TYPE_128, pybricks_hub_capabilities_char_uuid,
+        PBIO_PYBRICKS_HUB_CAPABILITIES_VALUE_SIZE, CHAR_PROP_READ, ATTR_PERMISSION_NONE,
+        GATT_DONT_NOTIFY_EVENTS, MIN_ENCRY_KEY_SIZE, CHAR_VALUE_LEN_CONSTANT);
+    PT_WAIT_UNTIL(pt, hci_command_complete);
+    aci_gatt_add_char_end(&pybricks_hub_capabilities_char_handle);
+
+    PT_WAIT_WHILE(pt, write_xfer_size);
+    {
+        uint8_t buf[PBIO_PYBRICKS_HUB_CAPABILITIES_VALUE_SIZE];
+        pbio_pybricks_hub_capabilities(buf, ATT_MTU - 3, PBSYS_APP_HUB_FEATURE_FLAGS, PBSYS_PROGRAM_LOAD_MAX_PROGRAM_SIZE);
+        aci_gatt_update_char_value_begin(pybricks_service_handle, pybricks_hub_capabilities_char_handle,
+            0, PBIO_PYBRICKS_HUB_CAPABILITIES_VALUE_SIZE, buf);
+    }
+    PT_WAIT_UNTIL(pt, hci_command_complete);
+    aci_gatt_update_char_value_end();
 
     PT_END(pt);
 }
@@ -886,11 +913,7 @@ static void handle_event(hci_event_pckt *event) {
 
                 case EVT_BLUE_GATT_ATTRIBUTE_MODIFIED: {
                     evt_gatt_attr_modified *subevt = (evt_gatt_attr_modified *)evt->data;
-                    if (subevt->attr_handle == pybricks_char_handle + 1) {
-                        if (receive_handler) {
-                            receive_handler(PBDRV_BLUETOOTH_CONNECTION_PYBRICKS, subevt->att_data, subevt->data_length);
-                        }
-                    } else if (subevt->attr_handle == pybricks_char_handle + 2) {
+                    if (subevt->attr_handle == pybricks_command_event_char_handle + 2) {
                         pybricks_notify_en = subevt->att_data[0];
                     } else if (subevt->attr_handle == uart_rx_char_handle + 1) {
                         if (receive_handler) {
@@ -909,6 +932,20 @@ static void handle_event(hci_event_pckt *event) {
                     if (notification_handler) {
                         notification_handler(PBDRV_BLUETOOTH_CONNECTION_PERIPHERAL_LWP3, subevt->attr_value, subevt->event_data_length - 2);
                     }
+                }
+                break;
+
+                case EVT_BLUE_GATT_WRITE_PERMIT_REQ: {
+                    evt_gatt_write_permit_req *subevt = (evt_gatt_write_permit_req *)evt->data;
+                    pbio_pybricks_error_t err = PBIO_PYBRICKS_ERROR_INVALID_HANDLE;
+
+                    if (subevt->attr_handle == pybricks_command_event_char_handle + 1) {
+                        if (receive_handler) {
+                            err = receive_handler(PBDRV_BLUETOOTH_CONNECTION_PYBRICKS, subevt->data, subevt->data_length);
+                        }
+                    }
+
+                    aci_gatt_write_response_begin(subevt->conn_handle, subevt->attr_handle, !!err, err, subevt->data_length, subevt->data);
                 }
                 break;
             }
@@ -1079,7 +1116,7 @@ static PT_THREAD(hci_init(struct pt *pt)) {
     // init GAP layer
 
     PT_WAIT_WHILE(pt, write_xfer_size);
-    aci_gap_init_begin(GAP_PERIPHERAL_ROLE | GAP_CENTRAL_ROLE, PRIVACY_DISABLED, 16); // 16 comes from LEGO bootloader
+    aci_gap_init_begin(GAP_PERIPHERAL_ROLE | GAP_CENTRAL_ROLE, PRIVACY_DISABLED, sizeof(pbdrv_bluetooth_hub_name));
     PT_WAIT_UNTIL(pt, hci_command_complete);
     aci_gap_init_end(&gap_service_handle, &gap_dev_name_char_handle, &gap_appearance_char_handle);
 
@@ -1090,6 +1127,25 @@ static PT_THREAD(hci_init(struct pt *pt)) {
         0, strlen(pbdrv_bluetooth_hub_name), pbdrv_bluetooth_hub_name);
     PT_WAIT_UNTIL(pt, hci_command_complete);
     aci_gatt_update_char_value_end();
+
+    // The chip always uses the same random address, so we have to generate
+    // an actually random one to get a new address each time. This must be
+    // called after aci_gap_init to take effect.
+
+    // STM32F0 doesn't have a random number generator, so we use the bluetooth
+    // chip to get some random bytes.
+    hci_le_rand_begin();
+    PT_WAIT_UNTIL(pt, hci_command_complete);
+    {
+        uint8_t rand_buf[8];
+        hci_le_rand_end(rand_buf);
+
+        // clear two msb to meet requirements of nonresolvable private address
+        rand_buf[5] &= 0x3F;
+        hci_le_set_random_address_begin(rand_buf);
+    }
+    PT_WAIT_UNTIL(pt, hci_command_complete);
+    hci_le_set_random_address_end();
 
     PT_END(pt);
 }

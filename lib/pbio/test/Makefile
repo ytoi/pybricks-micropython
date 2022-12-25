@@ -39,7 +39,7 @@ TINY_TEST_DIR = ../../../micropython/lib/tinytest
 TINY_TEST_INC = -I$(TINY_TEST_DIR)
 TINY_TEST_SRC = $(TINY_TEST_DIR)/tinytest.c
 
-# pbio depedency
+# pbio dependency
 CONTIKI_DIR = ../../contiki-core
 CONTIKI_INC = -I$(CONTIKI_DIR)
 CONTIKI_SRC = $(addprefix $(CONTIKI_DIR)/, \
@@ -51,22 +51,17 @@ CONTIKI_SRC = $(addprefix $(CONTIKI_DIR)/, \
 	sys/timer.c \
 	)
 
-# pbio depedency
+# pbio dependency
 LEGO_DIR = ../../lego
 LEGO_INC = -I$(LEGO_DIR)
 LEGO_SRC =
 
-# pbio depedency
-FIXMATH_DIR = ../../libfixmath
-FIXMATH_INC = -I$(FIXMATH_DIR)/libfixmath
-FIXMATH_SRC = $(shell find $(FIXMATH_DIR)/libfixmath -name "*.c")
-
-# pbio depedency
+# pbio dependency
 LWRB_DIR = ../../lwrb/src
 LWRB_INC = -I$(LWRB_DIR)/include
 LWRB_SRC = $(shell find $(LWRB_DIR)/lwrb -name "*.c")
 
-# pbio depedency
+# pbio dependency
 BTSTACK_DIR = ../../btstack
 BTSTACK_INC = -I$(BTSTACK_DIR)/src -I$(BTSTACK_DIR)/chipset/cc256x -I$(BTSTACK_DIR)/platform/posix
 BTSTACK_SRC = $(addprefix $(BTSTACK_DIR)/src/,\
@@ -148,7 +143,7 @@ $(BUILD_DIR)/genhdr/%.h: $(PBIO_DIR)/drv/bluetooth/%.gatt
 
 
 CFLAGS += -std=gnu99 -g -O0 -Wall -Werror
-CFLAGS += $(TINY_TEST_INC) $(CONTIKI_INC) $(LEGO_INC) $(FIXMATH_INC) $(LWRB_INC) $(BTSTACK_INC) $(PBIO_INC) $(TEST_INC)
+CFLAGS += $(TINY_TEST_INC) $(CONTIKI_INC) $(LEGO_INC) $(LWRB_INC) $(BTSTACK_INC) $(PBIO_INC) $(TEST_INC)
 CFLAGS += -I$(BUILD_DIR)
 CFLAGS += -DPBIO_TEST_BUILD=1
 
@@ -156,7 +151,7 @@ ifeq ($(COVERAGE),1)
 CFLAGS += --coverage
 endif
 
-SRC = $(TINY_TEST_SRC) $(CONTIKI_SRC) $(LEGO_SRC) $(FIXMATH_SRC) $(LWRB_SRC) $(BTSTACK_SRC) $(PBIO_SRC) $(TEST_SRC)
+SRC = $(TINY_TEST_SRC) $(CONTIKI_SRC) $(LEGO_SRC) $(LWRB_SRC) $(BTSTACK_SRC) $(PBIO_SRC) $(TEST_SRC)
 DEP = $(addprefix $(BUILD_PREFIX)/,$(SRC:.c=.d))
 OBJ = $(addprefix $(BUILD_PREFIX)/,$(SRC:.c=.o))
 
@@ -189,7 +184,6 @@ build-coverage/lcov.info: Makefile $(SRC)
 		--directory build-coverage/lib/pbio/sys \
 		--exclude **/btstack/** \
 		--exclude **/contiki-core/** \
-		--exclude **/libfixmath/**
 
 coverage-html: build-coverage/lcov.info
 	$(Q)genhtml $^ --output-directory build-coverage/html

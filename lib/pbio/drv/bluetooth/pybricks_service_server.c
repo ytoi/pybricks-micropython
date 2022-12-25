@@ -49,6 +49,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <pbio/int_math.h>
+#include <pbio/protocol.h>
+
+#include <pbsys/app.h>
+#include <pbsys/program_load.h>
+
 #include "btstack_defines.h"
 #include "ble/att_db.h"
 #include "ble/att_server.h"
@@ -59,40 +65,52 @@
 #include "pybricks_service_server.h"
 
 static att_service_handler_t pybricks_service;
-static pybricks_characteristic_write_callback_t client_callback;
+static pybricks_characteristic_write_callback_t client_write_callback;
 static pybricks_characteristic_configuration_callback_t client_configuration_callback;
 
-static uint16_t pybricks_value_handle;
-static uint16_t pybricks_client_configuration_handle;
-static uint16_t pybricks_client_configuration_value;
+static uint16_t pybricks_command_event_value_handle;
+static uint16_t pybricks_command_event_client_configuration_handle;
+static uint16_t pybricks_command_event_client_configuration_value;
+static uint16_t pybricks_hub_capabilities_value_handle;
 
-// TODO: need a way to reset pybricks_client_configuration_value on disconnect
+// TODO: need a way to reset pybricks_command_event_client_configuration_value on disconnect
 
 static uint16_t pybricks_service_read_callback(hci_con_handle_t con_handle, uint16_t attribute_handle, uint16_t offset, uint8_t *buffer, uint16_t buffer_size) {
     UNUSED(con_handle);
     UNUSED(offset);
-    UNUSED(buffer_size);
 
-    if (attribute_handle == pybricks_client_configuration_handle) {
+    if (attribute_handle == pybricks_command_event_client_configuration_handle) {
         if (buffer) {
-            little_endian_store_16(buffer, 0, pybricks_client_configuration_value);
+            little_endian_store_16(buffer, 0, pybricks_command_event_client_configuration_value);
         }
         return 2;
     }
+
+    if (attribute_handle == pybricks_hub_capabilities_value_handle) {
+        if (buffer && buffer_size >= PBIO_PYBRICKS_HUB_CAPABILITIES_VALUE_SIZE) {
+            pbio_pybricks_hub_capabilities(buffer, pbio_int_math_min(att_server_get_mtu(con_handle) - 3, 512),
+                PBSYS_APP_HUB_FEATURE_FLAGS, PBSYS_PROGRAM_LOAD_MAX_PROGRAM_SIZE);
+        }
+        return PBIO_PYBRICKS_HUB_CAPABILITIES_VALUE_SIZE;
+    }
+
     return 0;
 }
 
 static int pybricks_service_write_callback(hci_con_handle_t con_handle, uint16_t attribute_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size) {
-    UNUSED(transaction_mode);
     UNUSED(offset);
-    UNUSED(buffer_size);
 
-    if (attribute_handle == pybricks_value_handle) {
-        client_callback(con_handle, &buffer[0], buffer_size);
+    if (attribute_handle == pybricks_command_event_value_handle) {
+        if (transaction_mode != ATT_TRANSACTION_MODE_NONE) {
+            return ATT_ERROR_ATTRIBUTE_NOT_LONG;
+        }
+
+        return client_write_callback(con_handle, &buffer[0], buffer_size);
     }
-    if (attribute_handle == pybricks_client_configuration_handle) {
-        pybricks_client_configuration_value = little_endian_read_16(buffer, 0);
-        client_configuration_callback(con_handle, pybricks_client_configuration_value);
+
+    if (attribute_handle == pybricks_command_event_client_configuration_handle) {
+        pybricks_command_event_client_configuration_value = little_endian_read_16(buffer, 0);
+        client_configuration_callback(con_handle, pybricks_command_event_client_configuration_value);
     }
 
     return 0;
@@ -101,28 +119,27 @@ static int pybricks_service_write_callback(hci_con_handle_t con_handle, uint16_t
 void pybricks_service_server_init(
     pybricks_characteristic_write_callback_t write_callback,
     pybricks_characteristic_configuration_callback_t configuration_callback) {
-    static const uint8_t pybricks_service_uuid128[] = { 0xC5, 0xF5, 0x00, 0x01, 0x82, 0x80, 0x46, 0xDA, 0x89, 0xF4, 0x6D, 0x80, 0x51, 0xE4, 0xAE, 0xEF };
-    static const uint8_t pybricks_characteristic_uuid128[] = { 0xC5, 0xF5, 0x00, 0x02, 0x82, 0x80, 0x46, 0xDA, 0x89, 0xF4, 0x6D, 0x80, 0x51, 0xE4, 0xAE, 0xEF };
 
     btstack_assert(write_callback);
     btstack_assert(configuration_callback);
 
-    client_callback = write_callback;
+    client_write_callback = write_callback;
     client_configuration_callback = configuration_callback;
 
     // get service handle range
     uint16_t start_handle = 0;
     uint16_t end_handle = 0xffff;
-    int service_found = gatt_server_get_get_handle_range_for_service_with_uuid128(pybricks_service_uuid128, &start_handle, &end_handle);
+    int service_found = gatt_server_get_get_handle_range_for_service_with_uuid128(pbio_pybricks_service_uuid, &start_handle, &end_handle);
     btstack_assert(service_found != 0);
     UNUSED(service_found);
 
-    // get characteristic value handle and client configuration handle
-    pybricks_value_handle = gatt_server_get_value_handle_for_characteristic_with_uuid128(start_handle, end_handle, pybricks_characteristic_uuid128);
-    pybricks_client_configuration_handle = gatt_server_get_client_configuration_handle_for_characteristic_with_uuid128(start_handle, end_handle, pybricks_characteristic_uuid128);
+    // get characteristic value and descriptor handles
+    pybricks_command_event_value_handle = gatt_server_get_value_handle_for_characteristic_with_uuid128(start_handle, end_handle, pbio_pybricks_command_event_char_uuid);
+    pybricks_command_event_client_configuration_handle = gatt_server_get_client_configuration_handle_for_characteristic_with_uuid128(start_handle, end_handle, pbio_pybricks_command_event_char_uuid);
+    pybricks_hub_capabilities_value_handle = gatt_server_get_value_handle_for_characteristic_with_uuid128(start_handle, end_handle, pbio_pybricks_hub_capabilities_char_uuid);
 
-    log_info("pybricks_value_handle 0x%02x", pybricks_value_handle);
-    log_info("pybricks_client_configuration_handle 0x%02x", pybricks_client_configuration_handle);
+    log_info("pybricks_command_event_value_handle 0x%02x", pybricks_command_event_value_handle);
+    log_info("pybricks_command_event_client_configuration_handle 0x%02x", pybricks_command_event_client_configuration_handle);
 
     // register service with ATT Server
     pybricks_service.start_handle = start_handle;
@@ -148,7 +165,7 @@ void pybricks_service_server_request_can_send_now(btstack_context_callback_regis
  * @param size
  */
 int pybricks_service_server_send(hci_con_handle_t con_handle, const uint8_t *data, uint16_t size) {
-    return att_server_notify(con_handle, pybricks_value_handle, data, size);
+    return att_server_notify(con_handle, pybricks_command_event_value_handle, data, size);
 }
 
 #endif // PBDRV_CONFIG_BLUETOOTH_BTSTACK

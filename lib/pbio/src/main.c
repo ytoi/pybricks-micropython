@@ -37,15 +37,10 @@ AUTOSTART_PROCESSES(
 #if PBIO_CONFIG_UARTDEV
     &pbio_uartdev_process,
 #endif
-#if PBIO_CONFIG_ENABLE_SYS
-    &pbsys_process,
-#endif
 #if PBDRV_CONFIG_NUM_MOTOR_CONTROLLER != 0
     &pbio_motor_process,
 #endif
     NULL);
-
-static pbio_event_hook_t pbio_event_hook;
 
 /**
  * Initialize the Pybricks I/O Library. This function must be called once,
@@ -61,12 +56,20 @@ void pbio_init(void) {
 /**
  * Stops all user-level background processes. Drivers and OS-level processes
  * continue running.
+ *
+ * @param [in]  reset  Whether to reset all user-level processes to a clean
+ *                     state (true), or whether to only stop active outputs
+ *                     like sound or motors (false). The latter is useful
+ *                     to preserve the state for debugging, without sound
+ *                     or movement getting in the way or out of control.
  */
-void pbio_stop_all(void) {
+void pbio_stop_all(bool reset) {
     #if PBIO_CONFIG_LIGHT
-    pbio_light_animation_stop_all();
+    if (reset) {
+        pbio_light_animation_stop_all();
+    }
     #endif
-    pbio_dcmotor_stop_all(true);
+    pbio_dcmotor_stop_all(reset);
     pbdrv_sound_stop();
 }
 
@@ -82,19 +85,7 @@ void pbio_stop_all(void) {
  * @return      The number of still-pending events.
  */
 int pbio_do_one_event(void) {
-    if (pbio_event_hook) {
-        pbio_event_hook();
-    }
     return process_run();
-}
-
-/**
- * Sets a callback that is called each time pbio_do_one_event() is called.
- *
- * @param [in]  hook        A callback function or NULL.
- */
-void pbio_set_event_hook(pbio_event_hook_t hook) {
-    pbio_event_hook = hook;
 }
 
 /** @} */

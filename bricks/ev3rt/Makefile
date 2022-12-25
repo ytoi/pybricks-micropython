@@ -1,216 +1,192 @@
-MPTOP = ../../../..
-CROSS_COMPILE=arm-none-eabi-
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2013, 2014 Damien P. George
+# Copyright (c) 2019-2022 The Pybricks Authors
 
-# NXT:
-# CROSS_COMPILE=/path/to/bin/arm-elf-
--include mpconfigport.mk
-include $(MPTOP)/py/mkenv.mk
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+PBTOP := $(patsubst %/bricks/ev3rt/Makefile,%,$(mkfile_path))
 
 # ensure required git submodules checked out
-ifeq ("$(wildcard $(TOP)/ports/pybricks/lib/libfixmath/README.md)","")
-$(info GIT cloning libfixmath submodule)
-$(shell cd $(TOP)/ports/pybricks && git submodule update --init lib/libfixmath)
+ifeq ("$(wildcard $(PBTOP)/micropython/README.md)","")
+$(info GIT cloning micropython submodule)
+$(info $(shell cd $(PBTOP) && git submodule update --init micropython))
+ifeq ("$(wildcard $(PBTOP)/micropython/README.md)","")
+$(error failed)
 endif
-ifeq ("$(wildcard $(TOP)/ports/pybricks/bricks/ev3rt/ev3rt-hrp2/README.md)","")
-$(info GIT cloning ev3rt-hrp2 submodules)
-$(shell cd $(TOP)/ports/pybricks && git submodule update --checkout --init --recursive bricks/ev3rt/ev3rt-hrp2)
+endif
+ifeq ("$(wildcard $(PBTOP)/lib/ev3rt-lib/modules/mbed-on-toppers/README.md)","")
+$(info GIT cloning ev3rt-lib submodule)
+$(info $(shell cd $(PBTOP) && git submodule update --checkout --init --recursive lib/ev3rt-lib))
+ifeq ("$(wildcard $(PBTOP)/lib/ev3rt-lib/README.md)","")
+$(error failed)
+endif
 endif
 
-all: lib
+# lets micropython make files work with external files
+USER_C_MODULES = $(PBTOP)
 
-# OS name, for simple autoconfig
-UNAME_S := $(shell uname -s)
+include ../../micropython/py/mkenv.mk
+
+# qstr definitions (must come before including py.mk)
+QSTR_DEFS = ../_common/qstrdefs.h
+QSTR_GLOBAL_DEPENDENCIES = $(PBTOP)/bricks/ev3rt/mpconfigport.h
+
+# MicroPython feature configurations
+MICROPY_ROM_TEXT_COMPRESSION ?= 1
 
 # include py core make definitions
-include $(MPTOP)/py/py.mk
+include $(TOP)/py/py.mk
 
-INC +=  -I.
-INC +=  -I..
-INC +=  -I$(MPTOP)
-INC +=  -I$(MPTOP)/ports/unix
+CROSS_COMPILE ?= arm-none-eabi-
+
+PBIO_PLATFORM = ev3rt
+
+INC += -I.
+INC += -I$(TOP)
+INC += -I$(PBTOP)/lib/contiki-core
+INC += -I$(PBTOP)/lib/lego
+INC += -I$(PBTOP)/lib/lwrb/src/include
+INC += -I$(PBTOP)/lib/pbio/include
+INC += -I$(PBTOP)/lib/pbio/platform/$(PBIO_PLATFORM)
+INC += -I$(PBTOP)/lib/pbio
+INC += -I$(PBTOP)/lib/ev3rt-lib
+INC += -I$(PBTOP)/lib/ev3rt-lib/arch/arm_gcc/am1808
+INC += -I$(PBTOP)/lib/ev3rt-lib/arch/arm_gcc/common
+INC += -I$(PBTOP)/lib/ev3rt-lib/arch/gcc
+INC += -I$(PBTOP)/lib/ev3rt-lib/include
+INC += -I$(PBTOP)/lib/ev3rt-lib/sdk/common
+INC += -I$(PBTOP)/lib/ev3rt-lib/sdk/common/ev3api/include
+INC += -I$(PBTOP)/lib/ev3rt-lib/sdk/common/ev3api/src
+INC += -I$(PBTOP)/lib/ev3rt-lib/target/ev3_gcc
+INC += -I$(PBTOP)/lib/ev3rt-lib/target/ev3_gcc/pil/include
+
+INC += -I$(PBTOP)
 INC += -I$(BUILD)
 
-# compiler settings
-CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameters -Wextra -Wno-maybe-uninitialized
-CFLAGS_WARN += -Wpointer-arith -Wuninitialized
-CFLAGS = $(INC) -std=gnu99 $(CFLAGS_WARN) $(CFLAGS_MOD) $(COPT) $(CFLAGS_EXTRA)
-# NXT:
-# CFLAGS += -DMP_ENDIANNESS_LITTLE -mthumb-interwork
+GIT = git
 
-# Compiler flags should match TOPPERS kernel
-CFLAGS += -mcpu=arm926ej-s -mlittle-endian
+CFLAGS_MCU =
+CFLAGS_WARN = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-maybe-uninitialized
+CFLAGS = $(INC) -std=c99 -nostdlib -fshort-enums $(CFLAGS_MCU) $(CFLAGS_WARN) $(COPT) $(CFLAGS_EXTRA)
+$(BUILD)/lib/libm/%.o: CFLAGS += -Wno-sign-compare
 
-# Debugging/Optimization
-ifdef DEBUG
-CFLAGS += -g
-COPT = -O0
+LDFLAGS = $(addprefix -T,$(LD_FILES)) -Wl,-Map=$@.map -Wl,--cref -Wl,--gc-sections
+
+# avoid doubles
+CFLAGS += -fsingle-precision-constant -Wdouble-promotion
+
+# Tune for Debugging or Optimization
+ifeq ($(DEBUG), 1)
+CFLAGS += -Og -ggdb
 else
-COPT = -Os #-DNDEBUG
-# _FORTIFY_SOURCE is a feature in gcc/glibc which is intended to provide extra
-# security for detecting buffer overflows. Some distros (Ubuntu at the very least)
-# have it enabled by default.
-#
-# gcc already optimizes some printf calls to call puts and/or putchar. When
-# _FORTIFY_SOURCE is enabled and compiling with -O1 or greater, then some
-# printf calls will also be optimized to call __printf_chk (in glibc). Any
-# printfs which get redirected to __printf_chk are then no longer synchronized
-# with printfs that go through mp_printf.
-#
-# In MicroPython, we don't want to use the runtime library's printf but rather
-# go through mp_printf, so that stdout is properly tied into streams, etc.
-# This means that we either need to turn off _FORTIFY_SOURCE or provide our
-# own implementation of __printf_chk. We've chosen to turn off _FORTIFY_SOURCE.
-# It should also be noted that the use of printf in MicroPython is typically
-# quite limited anyways (primarily for debug and some error reporting, etc
-# in the unix version).
-#
-# Information about _FORTIFY_SOURCE seems to be rather scarce. The best I could
-# find was this: https://securityblog.redhat.com/2014/03/26/fortify-and-you/
-# Original patchset was introduced by
-# https://gcc.gnu.org/ml/gcc-patches/2004-09/msg02055.html .
-#
-# Turning off _FORTIFY_SOURCE is only required when compiling with -O1 or greater
-CFLAGS += -U _FORTIFY_SOURCE
+CFLAGS += -Os -DNDEBUG
+CFLAGS += -fdata-sections -ffunction-sections
 endif
 
-# On OSX, 'gcc' is a symlink to clang unless a real gcc is installed.
-# The unix port of MicroPython on OSX must be compiled with clang,
-# while cross-compile ports require gcc, so we test here for OSX and
-# if necessary override the value of 'CC' set in py/mkenv.mk
-ifeq ($(UNAME_S),Darwin)
-CC = clang
-# Use clang syntax for map file
-LDFLAGS_ARCH = -Wl,-map,$@.map
-else
-# Use gcc syntax for map file
-LDFLAGS_ARCH = -Wl,-Map=$@.map,--cref
-endif
-LDFLAGS = $(LDFLAGS_MOD) $(LDFLAGS_ARCH) -lm $(LDFLAGS_EXTRA)
+MPY_CROSS = ../../micropython/mpy-cross/mpy-cross
 
-ifeq ($(MICROPY_FORCE_32BIT),1)
-# Note: you may need to install i386 versions of dependency packages,
-# starting with linux-libc-dev:i386
-ifeq ($(MICROPY_PY_FFI),1)
-ifeq ($(UNAME_S),Linux)
-CFLAGS_MOD += -I/usr/include/i686-linux-gnu
-endif
-endif
-endif
+LIBS = "$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)"
 
-ifeq ($(MICROPY_USE_READLINE),1)
-INC +=  -I$(MPTOP)/shared/readline
-CFLAGS_MOD += -DMICROPY_USE_READLINE=1
-SHARED_SRC_C_EXTRA += readline/readline.c
-endif
-ifeq ($(MICROPY_USE_READLINE),2)
-CFLAGS_MOD += -DMICROPY_USE_READLINE=2
-LDFLAGS_MOD += -lreadline
-# the following is needed for BSD
-#LDFLAGS_MOD += -ltermcap
-endif
-ifeq ($(MICROPY_PY_TIME),1)
-CFLAGS_MOD += -DMICROPY_PY_TIME=1
-SRC_MOD += modtime.c
-endif
-ifeq ($(MICROPY_PY_TERMIOS),1)
-CFLAGS_MOD += -DMICROPY_PY_TERMIOS=1
-SRC_MOD += modtermios.c
-endif
-ifeq ($(MICROPY_PY_SOCKET),1)
-CFLAGS_MOD += -DMICROPY_PY_SOCKET=1
-SRC_MOD += modsocket.c
-endif
+CFLAGS += -DTOPPERS_OMIT_TECS
 
-ifeq ($(MICROPY_PY_FFI),1)
+# Sources and libraries common to all pybricks bricks
 
-ifeq ($(MICROPY_STANDALONE),1)
-LIBFFI_CFLAGS_MOD := -I$(shell ls -1d $(MPTOP)/lib/libffi/build_dir/out/lib/libffi-*/include)
- ifeq ($(MICROPY_FORCE_32BIT),1)
-  LIBFFI_LDFLAGS_MOD = $(MPTOP)/lib/libffi/build_dir/out/lib32/libffi.a
- else
-  LIBFFI_LDFLAGS_MOD = $(MPTOP)/lib/libffi/build_dir/out/lib/libffi.a
- endif
-else
-LIBFFI_CFLAGS_MOD := $(shell pkg-config --cflags libffi)
-LIBFFI_LDFLAGS_MOD := $(shell pkg-config --libs libffi)
-endif
+include ../_common/sources.mk
 
-ifeq ($(UNAME_S),Linux)
-LIBFFI_LDFLAGS_MOD += -ldl
-endif
+# Embedded MicroPython sources
 
-CFLAGS_MOD += $(LIBFFI_CFLAGS_MOD) -DMICROPY_PY_FFI=1
-LDFLAGS_MOD += $(LIBFFI_LDFLAGS_MOD)
-SRC_MOD += modffi.c
-endif
-
-# source files
-SRC_C = $(addprefix ports/unix/,\
-	gccollect.c \
-	input.c \
-	file.c \
-	modmachine.c \
-	moduselect.c \
-	coverage.c \
-	fatfs_port.c \
-	$(SRC_MOD) \
-	) \
-	$(addprefix ports/pybricks/bricks/ev3rt/,\
-	mphal.c \
+PY_EMBEDDED_SRC_C = $(addprefix bricks/,\
+	_common/micropython.c \
+	ev3rt/mphalport.c \
 	)
 
-SHARED_SRC_C = $(addprefix shared/,\
-	runtime/printf.c \
+# Extra core MicroPython files
+
+# NB: Since we are using MicroPython's build system, files in the micropython/
+# directory have the micropython/ prefix excluded. It is very important to do
+# it that way since there is special handling of certain files that will break
+# if we don't do it this way. So we need to be very careful about name clashes
+# between the top level directory and the micropython/ subdirectory.
+
+PY_EXTRA_SRC_C += $(addprefix shared/,\
+	libc/string0.c \
+	readline/readline.c \
+	runtime/gchelper_native.c \
 	runtime/interrupt_char.c \
-	timeutils/timeutils.c \
-	$(SHARED_SRC_C_EXTRA) \
+	runtime/pyexec.c \
+	runtime/stdout_helpers.c \
+	runtime/sys_stdio_mphal.c \
 	)
 
-ifeq ($(MICROPY_FATFS),1)
-LIB_SRC_C += $(addprefix lib/,\
-	fatfs/ff.c \
-	fatfs/option/ccsbcs.c \
-	)
-endif
+SRC_S = shared/runtime/gchelper_m0.s
 
 OBJ = $(PY_O)
-OBJ += $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
-OBJ += $(addprefix $(BUILD)/, $(SHARED_SRC_C:.c=.o))
-OBJ += $(addprefix $(BUILD)/, $(LIB_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(PY_EXTRA_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(PY_EMBEDDED_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(SRC_S:.s=.o))
+OBJ += $(addprefix $(BUILD)/, $(PYBRICKS_PYBRICKS_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(CONTIKI_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(LWRB_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(PBIO_SRC_C:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(SRC_LIBM:.c=.o))
 
 # List of sources for qstr extraction
-SRC_QSTR += $(SRC_C) $(SHARED_SRC_C) $(LIB_SRC_C)
-# Append any auto-generated sources that are needed by sources listed in
-# SRC_QSTR
+SRC_QSTR += $(PY_EXTRA_SRC_C) $(PY_EMBEDDED_SRC_C) $(PYBRICKS_PYBRICKS_SRC_C)
+# Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
-include $(MPTOP)/py/mkrules.mk
+FW_VERSION := $(shell $(GIT) describe --tags --dirty --always --exclude "@pybricks/*")
 
-# Value of configure's --host= option (required for cross-compilation).
-# Deduce it from CROSS_COMPILE by default, but can be overridden.
-ifneq ($(CROSS_COMPILE),)
-CROSS_COMPILE_HOST = --host=$(patsubst %-,%,$(CROSS_COMPILE))
-else
-CROSS_COMPILE_HOST =
-endif
+$(BUILD)/pybricks.cfg: clear-cfg
+	$(ECHO) "Creating $@"
+	$(Q)$(PYTHON) make_config.py $@ $(OBJ)
 
-deplibs: libffi axtls
+clear-cfg:
+	rm -f $(BUILD)/pybricks.cfg
 
-# install-exec-recursive & install-data-am targets are used to avoid building
-# docs and depending on makeinfo
-libffi:
-	cd $(MPTOP)/lib/libffi; git clean -d -x -f
-	cd $(MPTOP)/lib/libffi; ./autogen.sh
-	mkdir -p $(MPTOP)/lib/libffi/build_dir; cd $(MPTOP)/lib/libffi/build_dir; \
-	../configure $(CROSS_COMPILE_HOST) --prefix=$$PWD/out CC="$(CC)" CXX="$(CXX)" LD="$(LD)"; \
-	make install-exec-recursive; make -C include install-data-am
+include $(TOP)/py/mkrules.mk
 
-axtls: $(MPTOP)/lib/axtls/README
-	cd $(MPTOP)/lib/axtls; cp config/upyconfig config/.config
-	cd $(MPTOP)/lib/axtls; make oldconfig -B
-	cd $(MPTOP)/lib/axtls; make clean
-	cd $(MPTOP)/lib/axtls; make all CC="$(CC)" LD="$(LD)"
+#
+# Paths and object files
+#
+KERNEL := hrp
+EV3RT_BRICK_DIR := $(PBTOP)/bricks/ev3rt
+EV3RT_LIB_DIR := $(PBTOP)/lib/ev3rt-lib
+APPLDIRS := \
+	$(EV3RT_BRICK_DIR) \
+	$(PBTOP)/lib/pbio/include \
+	$(PBTOP)/lib/pbio/platform/ev3rt \
+	$(PBTOP)/micropython/py \
 
-$(MPTOP)/lib/axtls/README:
-	@echo "You cloned without --recursive, fetching submodules for you."
-	(cd $(MPTOP); git submodule update --init --recursive)
+#
+# Used by sub-makefile
+#
+export EV3RT_BRICK_DIR
+export EV3RT_LIB_DIR
+export APPLDIRS
+
+all: ev3rt
+
+ev3rt-config: $(EV3RT_BRICK_DIR) $(BUILD)/libkernel.a prepare-obj-folder
+	make -C $(BUILD) offset.h kernel_cfg.h
+
+ev3rt-main: $(OBJ)
+	make -C $(BUILD) > /dev/null && \
+	arm-none-eabi-objcopy -O binary $(BUILD)/$(KERNEL) $(BUILD)/$(KERNEL).bin
+	@mkimage -A arm -O linux -T kernel -C none -a 0xc0008000 -e 0xc0008000 \
+        -n "TOPPERS/$(KERNEL) Kernel (EV3)" \
+		-d $(BUILD)/$(KERNEL).bin $(BUILD)/uImage
+	@chmod +x $(BUILD)/uImage
+
+ev3rt:
+	mkdir -p $(EV3RT_BRICK_DIR)/build
+	make $(BUILD)/pybricks.cfg
+	make ev3rt-config
+	make ev3rt-main
+
+$(BUILD)/libkernel.a: prepare-obj-folder
+	make -C $(BUILD) libkernel.a
+
+prepare-obj-folder:
+	mkdir -p $(EV3RT_BRICK_DIR)/build
+	mkdir -p $(EV3RT_BRICK_DIR)/build/objs
+	cp $(EV3RT_BRICK_DIR)/ev3rt.mk $(EV3RT_BRICK_DIR)/build/Makefile

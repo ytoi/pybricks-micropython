@@ -35,7 +35,7 @@ mp_obj_t common_Control_obj_make_new(pbio_control_t *control) {
 
     #if PYBRICKS_PY_COMMON_LOGGER
     // Create an instance of the Logger class
-    self->logger = common_Logger_obj_make_new(&self->control->log, PBIO_CONTROL_LOG_COLS);
+    self->logger = common_Logger_obj_make_new(&self->control->log, PBIO_CONTROL_LOGGER_NUM_COLS);
     #endif
 
     self->scale = mp_obj_new_int(control->settings.ctl_steps_per_app_step);
@@ -52,7 +52,7 @@ STATIC mp_obj_t common_Control_limits(size_t n_args, const mp_obj_t *pos_args, m
         PB_ARG_DEFAULT_NONE(acceleration),
         PB_ARG_DEFAULT_NONE(torque));
 
-    // Read current values. Deceleration is read but cannot be updated.
+    // Read current values.
     int32_t speed, acceleration, deceleration, torque;
     pbio_control_settings_get_limits(&self->control->settings, &speed, &acceleration, &deceleration, &torque);
 
@@ -74,7 +74,7 @@ STATIC mp_obj_t common_Control_limits(size_t n_args, const mp_obj_t *pos_args, m
         return mp_obj_new_tuple(3, ret);
     }
 
-    // Set user settings
+    // Set user settings if given, else keep using current value.
     speed = pb_obj_get_default_abs_int(speed_in, speed);
     torque = pb_obj_get_default_abs_int(torque_in, torque);
 
@@ -83,8 +83,8 @@ STATIC mp_obj_t common_Control_limits(size_t n_args, const mp_obj_t *pos_args, m
         acceleration = pb_obj_get_int(acceleration_in);
         deceleration = acceleration;
     }
-    // Otherwise, unpack acceleration and deceleration from tuple.
-    else {
+    // If something else is given, unpack acceleration and deceleration from tuple.
+    else if (acceleration_in != mp_const_none) {
         mp_obj_t *values;
         size_t n;
         mp_obj_get_array(acceleration_in, &n, &values);
@@ -231,6 +231,8 @@ STATIC mp_obj_t common_Control_trajectory(mp_obj_t self_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(common_Control_trajectory_obj, common_Control_trajectory);
 
+// DELETEME: This method should not be used in V3.2 or later. It may be removed
+// in a future version
 // pybricks._common.Control.done
 STATIC mp_obj_t common_Control_done(mp_obj_t self_in) {
     common_Control_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -238,14 +240,23 @@ STATIC mp_obj_t common_Control_done(mp_obj_t self_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(common_Control_done_obj, common_Control_done);
 
+// DELETEME: This method should not be used in V3.2 or later. It may be removed
+// in a future version
 // pybricks._common.Control.load
 STATIC mp_obj_t common_Control_load(mp_obj_t self_in) {
     common_Control_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    if (!pbio_control_is_active(self->control)) {
+        return mp_obj_new_int(0);
+    }
+
     // Read currently applied PID feedback torque and return as mNm.
-    return mp_obj_new_int(pbio_control_get_load(self->control) / 1000);
+    return mp_obj_new_int(self->control->pid_average / 1000);
 }
 MP_DEFINE_CONST_FUN_OBJ_1(common_Control_load_obj, common_Control_load);
 
+// DELETEME: This method should not be used in V3.2 or later. It may be removed
+// in a future version
 // pybricks._common.Control.stalled
 STATIC mp_obj_t common_Control_stalled(mp_obj_t self_in) {
     common_Control_obj_t *self = MP_OBJ_TO_PTR(self_in);

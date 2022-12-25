@@ -298,7 +298,7 @@ static PT_THREAD(pbdrv_pwm_tlc5955_stm32_handle_event(pbdrv_pwm_tlc5955_stm32_pr
 }
 
 /**
- * Interupt handler for Rx DMA IRQ. Needs to be called from IRQ handler in platform.c.
+ * Interrupt handler for Rx DMA IRQ. Needs to be called from IRQ handler in platform.c.
  */
 void pbdrv_pwm_tlc5955_stm32_rx_dma_irq(uint8_t index) {
     pbdrv_pwm_tlc5955_stm32_priv_t *priv = &dev_priv[index];
@@ -307,7 +307,7 @@ void pbdrv_pwm_tlc5955_stm32_rx_dma_irq(uint8_t index) {
 }
 
 /**
- * Interupt handler for Tx DMA IRQ. Needs to be called from IRQ handler in platform.c.
+ * Interrupt handler for Tx DMA IRQ. Needs to be called from IRQ handler in platform.c.
  */
 void pbdrv_pwm_tlc5955_stm32_tx_dma_irq(uint8_t index) {
     pbdrv_pwm_tlc5955_stm32_priv_t *priv = &dev_priv[index];
@@ -316,7 +316,7 @@ void pbdrv_pwm_tlc5955_stm32_tx_dma_irq(uint8_t index) {
 }
 
 /**
- * Interupt handler for SPI IRQ. Needs to be called from IRQ handler in platform.c.
+ * Interrupt handler for SPI IRQ. Needs to be called from IRQ handler in platform.c.
  */
 void pbdrv_pwm_tlc5955_stm32_spi_irq(uint8_t index) {
     pbdrv_pwm_tlc5955_stm32_priv_t *priv = &dev_priv[index];
@@ -324,7 +324,10 @@ void pbdrv_pwm_tlc5955_stm32_spi_irq(uint8_t index) {
     HAL_SPI_IRQHandler(&priv->hspi);
 }
 
-void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+/**
+ * Tx transfer complete. Needs to be called from handler in platform.c.
+ */
+void pbdrv_pwm_tlc5955_stm32_spi_tx_complete(void) {
     process_poll(&pwm_tlc5955_stm32);
 }
 

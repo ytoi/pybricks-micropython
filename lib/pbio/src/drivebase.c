@@ -6,7 +6,7 @@
 #include <pbdrv/clock.h>
 #include <pbio/error.h>
 #include <pbio/drivebase.h>
-#include <pbio/math.h>
+#include <pbio/int_math.h>
 #include <pbio/servo.h>
 
 #if PBIO_CONFIG_NUM_DRIVEBASES > 0
@@ -51,23 +51,23 @@ static void drivebase_adopt_settings(pbio_control_settings_t *s_distance, pbio_c
 
     // For all settings, take the value of the least powerful motor to ensure
     // that the drivebase can meet the given specs.
-    s_distance->speed_max = pbio_math_min(s_left->speed_max, s_right->speed_max);
-    s_distance->speed_tolerance = pbio_math_min(s_left->speed_tolerance, s_right->speed_tolerance);
-    s_distance->stall_speed_limit = pbio_math_min(s_left->stall_speed_limit, s_right->stall_speed_limit);
-    s_distance->integral_change_max = pbio_math_min(s_left->integral_change_max, s_right->integral_change_max);
-    s_distance->actuation_max = pbio_math_min(s_left->actuation_max, s_right->actuation_max);
-    s_distance->stall_time = pbio_math_min(s_left->stall_time, s_right->stall_time);
+    s_distance->speed_max = pbio_int_math_min(s_left->speed_max, s_right->speed_max);
+    s_distance->speed_tolerance = pbio_int_math_min(s_left->speed_tolerance, s_right->speed_tolerance);
+    s_distance->stall_speed_limit = pbio_int_math_min(s_left->stall_speed_limit, s_right->stall_speed_limit);
+    s_distance->integral_change_max = pbio_int_math_min(s_left->integral_change_max, s_right->integral_change_max);
+    s_distance->actuation_max = pbio_int_math_min(s_left->actuation_max, s_right->actuation_max);
+    s_distance->stall_time = pbio_int_math_min(s_left->stall_time, s_right->stall_time);
 
     // Make acceleration a bit slower for smoother driving.
-    s_distance->acceleration = pbio_math_min(s_left->acceleration, s_right->acceleration) * 3 / 4;
-    s_distance->deceleration = pbio_math_min(s_left->deceleration, s_right->deceleration) * 3 / 4;
+    s_distance->acceleration = pbio_int_math_min(s_left->acceleration, s_right->acceleration) * 3 / 4;
+    s_distance->deceleration = pbio_int_math_min(s_left->deceleration, s_right->deceleration) * 3 / 4;
 
     // Use minimum PID of both motors, to avoid overly aggressive control if
     // one of the two motors has much higher PID values. For proportional
     // control, take a much lower gain. Drivebases don't need it, and it makes
     // for a smoother ride.
-    s_distance->pid_kp = pbio_math_min(s_left->pid_kp, s_right->pid_kp) / 4;
-    s_distance->pid_kd = pbio_math_min(s_left->pid_kd, s_right->pid_kd);
+    s_distance->pid_kp = pbio_int_math_min(s_left->pid_kp, s_right->pid_kp) / 4;
+    s_distance->pid_kd = pbio_int_math_min(s_left->pid_kd, s_right->pid_kd);
 
     // Integral control is not necessary since there is constant external
     // force to overcome that wouldn't be done by proportional control.
@@ -116,12 +116,14 @@ static pbio_error_t pbio_drivebase_get_state_control(pbio_drivebase_t *db, pbio_
     pbio_angle_avg(&state_left.position, &state_right.position, &state_distance->position);
     pbio_angle_avg(&state_left.position_estimate, &state_right.position_estimate, &state_distance->position_estimate);
     state_distance->speed_estimate = (state_left.speed_estimate + state_right.speed_estimate) / 2;
+    state_distance->speed = (state_left.speed + state_right.speed) / 2;
 
     // Take difference to get heading state, which is implemented as
     // (left - right) / 2 = (left + right) / 2 - right = avg - right.
     pbio_angle_diff(&state_distance->position, &state_right.position, &state_heading->position);
     pbio_angle_diff(&state_distance->position_estimate, &state_right.position_estimate, &state_heading->position_estimate);
     state_heading->speed_estimate = state_distance->speed_estimate - state_right.speed_estimate;
+    state_heading->speed = state_distance->speed - state_right.speed;
 
     return PBIO_SUCCESS;
 }
@@ -153,6 +155,16 @@ static void pbio_drivebase_stop_servo_control(pbio_drivebase_t *db) {
 }
 
 /**
+ * Checks if both drive base controllers are active.
+ *
+ * @param [in]  drivebase       Pointer to this drivebase instance.
+ * @return                      True if heading and distance control are active, else false.
+ */
+static bool pbio_drivebase_control_is_active(pbio_drivebase_t *db) {
+    return pbio_control_is_active(&db->control_distance) && pbio_control_is_active(&db->control_heading);
+}
+
+/**
  * Drivebase stop function that can be called from a servo.
  *
  * When a new command is issued to a servo, the servo calls this to stop the
@@ -169,7 +181,7 @@ static pbio_error_t pbio_drivebase_stop_from_servo(void *drivebase, bool clear_p
     pbio_drivebase_t *db = drivebase;
 
     // If drive base control is not active, there is nothing we need to do.
-    if (!pbio_control_is_active(&db->control_distance) && !pbio_control_is_active(&db->control_heading)) {
+    if (!pbio_drivebase_control_is_active(db)) {
         return PBIO_SUCCESS;
     }
 
@@ -308,15 +320,13 @@ pbio_error_t pbio_drivebase_stop(pbio_drivebase_t *db, pbio_control_on_completio
 }
 
 /**
- * Checks if a drivebase is not yet at the position or time target.
- *
- * If the drivebase is holding position, it is not busy.
+ * Checks if a drivebase has completed its maneuver.
  *
  * @param [in]  db          The drivebase instance
  * @return                  True if still moving to target, false if not.
  */
-bool pbio_drivebase_is_busy(pbio_drivebase_t *db) {
-    return !pbio_control_is_done(&db->control_distance) || !pbio_control_is_done(&db->control_heading);
+bool pbio_drivebase_is_done(pbio_drivebase_t *db) {
+    return pbio_control_is_done(&db->control_distance) && pbio_control_is_done(&db->control_heading);
 }
 
 /**
@@ -503,7 +513,7 @@ pbio_error_t pbio_drivebase_drive_curve(pbio_drivebase_t *db, int32_t radius, in
     int32_t arc_angle = radius < 0 ? -angle : angle;
 
     // Arc length is computed accordingly.
-    int32_t arc_length = (10 * pbio_math_abs(angle) * radius) / 573;
+    int32_t arc_length = (10 * pbio_int_math_abs(angle) * radius) / 573;
 
     // Execute the common drive command at default speed.
     return pbio_drivebase_drive_relative(db, arc_length, 0, arc_angle, 0, on_completion);
@@ -515,11 +525,11 @@ pbio_error_t pbio_drivebase_drive_curve(pbio_drivebase_t *db, int32_t radius, in
  * @param [in]  db              The drivebase instance.
  * @param [in]  drive_speed     The drive speed in mm/s.
  * @param [in]  turn_speed      The turn speed in deg/s.
- * @param [in]  duration        The duration in control ticks.
+ * @param [in]  duration        The duration in ms.
  * @param [in]  on_completion   What to do when reaching the target.
  * @return                      Error code.
  */
-static pbio_error_t pbio_drivebase_drive_timed(pbio_drivebase_t *db, int32_t drive_speed, int32_t turn_speed, uint32_t duration, pbio_control_on_completion_t on_completion) {
+static pbio_error_t pbio_drivebase_drive_time_common(pbio_drivebase_t *db, int32_t drive_speed, int32_t turn_speed, uint32_t duration, pbio_control_on_completion_t on_completion) {
 
     // Don't allow new user command if update loop not registered.
     if (!pbio_drivebase_update_loop_is_running(db)) {
@@ -563,7 +573,7 @@ static pbio_error_t pbio_drivebase_drive_timed(pbio_drivebase_t *db, int32_t dri
  * @return                      Error code.
  */
 pbio_error_t pbio_drivebase_drive_forever(pbio_drivebase_t *db, int32_t speed, int32_t turn_rate) {
-    return pbio_drivebase_drive_timed(db, speed, turn_rate, DURATION_FOREVER_TICKS, PBIO_CONTROL_ON_COMPLETION_CONTINUE);
+    return pbio_drivebase_drive_time_common(db, speed, turn_rate, PBIO_TRAJECTORY_DURATION_FOREVER_MS, PBIO_CONTROL_ON_COMPLETION_CONTINUE);
 }
 
 /**
@@ -586,9 +596,9 @@ pbio_error_t pbio_drivebase_get_state_user(pbio_drivebase_t *db, int32_t *distan
         return err;
     }
     *distance = pbio_control_settings_ctl_to_app_long(&db->control_distance.settings, &state_distance.position);
-    *drive_speed = pbio_control_settings_ctl_to_app(&db->control_distance.settings, state_distance.speed_estimate);
+    *drive_speed = pbio_control_settings_ctl_to_app(&db->control_distance.settings, state_distance.speed);
     *angle = pbio_control_settings_ctl_to_app_long(&db->control_heading.settings, &state_heading.position);
-    *turn_rate = pbio_control_settings_ctl_to_app(&db->control_heading.settings, state_heading.speed_estimate);
+    *turn_rate = pbio_control_settings_ctl_to_app(&db->control_heading.settings, state_heading.speed);
     return PBIO_SUCCESS;
 }
 
@@ -635,19 +645,72 @@ pbio_error_t pbio_drivebase_set_drive_settings(pbio_drivebase_t *db, int32_t dri
     pbio_control_settings_t *sd = &db->control_distance.settings;
     pbio_control_settings_t *sh = &db->control_heading.settings;
 
-    sd->speed_default = pbio_math_clamp(pbio_control_settings_app_to_ctl(sd, drive_speed), sd->speed_max);
+    sd->speed_default = pbio_int_math_clamp(pbio_control_settings_app_to_ctl(sd, drive_speed), sd->speed_max);
     sd->acceleration = pbio_control_settings_app_to_ctl(sd, drive_acceleration);
     sd->deceleration = pbio_control_settings_app_to_ctl(sd, drive_deceleration);
-    sh->speed_default = pbio_math_clamp(pbio_control_settings_app_to_ctl(sh, turn_rate), sh->speed_max);
+    sh->speed_default = pbio_int_math_clamp(pbio_control_settings_app_to_ctl(sh, turn_rate), sh->speed_max);
     sh->acceleration = pbio_control_settings_app_to_ctl(sh, turn_acceleration);
     sh->deceleration = pbio_control_settings_app_to_ctl(sh, turn_deceleration);
 
     return PBIO_SUCCESS;
 }
 
+/**
+ * Checks whether drivebase is stalled. If the drivebase is actively
+ * controlled, it is stalled when the controller(s) cannot maintain the
+ * target speed or position while using maximum allowed torque. If control
+ * is not active, it uses the individual servos to check for stall.
+ *
+ * @param [in]  db              The servo instance.
+ * @param [out] stalled         True if stalled, false if not.
+ * @param [out] stall_duration  For how long it has been stalled (ms).
+ * @return                      Error code. ::PBIO_ERROR_INVALID_OP if update
+ *                              loop not running, else ::PBIO_SUCCESS
+ */
+pbio_error_t pbio_drivebase_is_stalled(pbio_drivebase_t *db, bool *stalled, uint32_t *stall_duration) {
+
+    // Don't allow access if update loop not registered.
+    if (!pbio_drivebase_update_loop_is_running(db)) {
+        *stalled = false;
+        *stall_duration = 0;
+        return PBIO_ERROR_INVALID_OP;
+    }
+
+    pbio_error_t err;
+
+    // If drive base control is active, look at controller state.
+    if (pbio_drivebase_control_is_active(db)) {
+        uint32_t stall_duration_distance; // ticks, 0 on false
+        uint32_t stall_duration_heading; // ticks, 0 on false
+        bool stalled_heading = pbio_control_is_stalled(&db->control_heading, &stall_duration_heading);
+        bool stalled_distance = pbio_control_is_stalled(&db->control_distance, &stall_duration_distance);
+
+        // We are stalled if any controller is stalled.
+        *stalled = stalled_heading || stalled_distance;
+        *stall_duration = pbio_control_time_ticks_to_ms(pbio_int_math_max(stall_duration_distance, stall_duration_heading));
+        return PBIO_SUCCESS;
+    }
+
+    // Otherwise look at individual servos.
+    bool stalled_left;
+    bool stalled_right;
+    uint32_t stall_duration_left; // ms, 0 on false.
+    uint32_t stall_duration_right; // ms, 0 on false.
+    err = pbio_servo_is_stalled(db->left, &stalled_left, &stall_duration_left);
+    if (err != PBIO_SUCCESS) {
+        return err;
+    }
+    err = pbio_servo_is_stalled(db->left, &stalled_right, &stall_duration_right);
+    if (err != PBIO_SUCCESS) {
+        return err;
+    }
+    // We are stalled if at least one motor is stalled.
+    *stalled = stalled_left || stalled_right;
+    *stall_duration = pbio_int_math_max(stall_duration_left, stall_duration_right);
+    return PBIO_SUCCESS;
+}
+
 #if PBIO_CONFIG_DRIVEBASE_SPIKE
-
-
 
 /**
  * Gets spike drivebase instance from two servo instances.
@@ -693,7 +756,7 @@ pbio_error_t pbio_drivebase_spike_drive_time(pbio_drivebase_t *db, int32_t speed
     // Start driving forever with the given sum and dif rates.
     int32_t drive_speed = (speed_left + speed_right) / 2;
     int32_t turn_speed = (speed_left - speed_right) / 2;
-    return pbio_drivebase_drive_timed(db, drive_speed, turn_speed, pbio_control_time_ms_to_ticks(duration), on_completion);
+    return pbio_drivebase_drive_time_common(db, drive_speed, turn_speed, duration, on_completion);
 }
 
 /**
@@ -706,7 +769,7 @@ pbio_error_t pbio_drivebase_spike_drive_time(pbio_drivebase_t *db, int32_t speed
  */
 pbio_error_t pbio_drivebase_spike_drive_forever(pbio_drivebase_t *db, int32_t speed_left, int32_t speed_right) {
     // Same as driving for time, just without an endpoint.
-    return pbio_drivebase_spike_drive_time(db, speed_left, speed_right, DURATION_FOREVER_TICKS, PBIO_CONTROL_ON_COMPLETION_CONTINUE);
+    return pbio_drivebase_spike_drive_time(db, speed_left, speed_right, PBIO_TRAJECTORY_DURATION_FOREVER_MS, PBIO_CONTROL_ON_COMPLETION_CONTINUE);
 }
 
 /**
@@ -735,14 +798,14 @@ pbio_error_t pbio_drivebase_spike_drive_angle(pbio_drivebase_t *db, int32_t spee
     }
 
     // Work out angles for each motor.
-    int32_t max_speed = pbio_math_max(pbio_math_abs(speed_left), pbio_math_abs(speed_right));
+    int32_t max_speed = pbio_int_math_max(pbio_int_math_abs(speed_left), pbio_int_math_abs(speed_right));
     int32_t angle_left = max_speed == 0 ? 0 : angle * speed_left / max_speed;
     int32_t angle_right = max_speed == 0 ? 0 : angle * speed_right / max_speed;
 
     // Work out the required total and difference angles to achieve this.
     int32_t distance = (angle_left + angle_right) / 2;
     int32_t turn_angle = (angle_left - angle_right) / 2;
-    int32_t speed = (pbio_math_abs(speed_left) + pbio_math_abs(speed_right)) / 2;
+    int32_t speed = (pbio_int_math_abs(speed_left) + pbio_int_math_abs(speed_right)) / 2;
 
     // Execute the maneuver.
     return pbio_drivebase_drive_relative(db, distance, speed, turn_angle, speed, on_completion);
@@ -753,7 +816,7 @@ pbio_error_t pbio_drivebase_spike_drive_angle(pbio_drivebase_t *db, int32_t spee
  *
  * The steering value must be in the range [-100, 100].
  *
- * @param [in]  speed         Overal speed (deg/s).
+ * @param [in]  speed         Overall speed (deg/s).
  * @param [in]  steering      Steering ratio.
  * @param [out] speed_left    Speed of the left motor (deg/s).
  * @param [out] speed_right   Speed of the right motor (deg/s).
@@ -771,7 +834,7 @@ pbio_error_t pbio_drivebase_spike_steering_to_tank(int32_t speed, int32_t steeri
     *speed_right = speed;
 
     // Depending on steering direction, one wheel moves slower.
-    *(steering > 0 ? speed_right : speed_left) = speed * (100 - 2 * pbio_math_abs(steering)) / 100;
+    *(steering > 0 ? speed_right : speed_left) = speed * (100 - 2 * pbio_int_math_abs(steering)) / 100;
     return PBIO_SUCCESS;
 }
 

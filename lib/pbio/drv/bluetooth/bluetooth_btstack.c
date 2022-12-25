@@ -135,10 +135,12 @@ static void pybricks_can_send(void *context) {
     send->done();
 }
 
-static void pybricks_data_received(hci_con_handle_t tx_con_handle, const uint8_t *data, uint16_t size) {
+static pbio_pybricks_error_t pybricks_data_received(hci_con_handle_t tx_con_handle, const uint8_t *data, uint16_t size) {
     if (receive_handler) {
-        receive_handler(PBDRV_BLUETOOTH_CONNECTION_PYBRICKS, data, size);
+        return receive_handler(PBDRV_BLUETOOTH_CONNECTION_PYBRICKS, data, size);
     }
+
+    return ATT_ERROR_UNLIKELY_ERROR;
 }
 
 static void pybricks_configured(hci_con_handle_t tx_con_handle, uint16_t value) {
@@ -309,7 +311,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             if (handset.con_state == CON_STATE_WAIT_ADV_IND) {
                 // HACK: this is making major assumptions about how the advertising data
                 // is laid out. So far LEGO devices seem consistent in this.
-                // It is expected that the avertising data contains 3 values in
+                // It is expected that the advertising data contains 3 values in
                 // this order:
                 // - Flags (0x01)
                 // - Complete List of 128-bit Service Class UUIDs (0x07)
@@ -335,7 +337,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                 //          is a sufficient check to check that scan response is from LWP3 device
                 // PREVIOUSLY: extra check: data_length == 30 for HANDSET
                 //                          data_length == 27 for MARIO
-                //                          data_lenght == 20 for SYSTEM_2IO ... etc
+                //                          data_length == 20 for SYSTEM_2IO ... etc
                 if (event_type == SCAN_RSP && bd_addr_cmp(address, handset.address) == 0) {
                     if (data[1] == BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME) {
                         // if the name was passed in from the caller, then filter on name
@@ -423,6 +425,8 @@ void pbdrv_bluetooth_init(void) {
     sm_set_er((uint8_t *)pdata->er_key);
     sm_set_ir((uint8_t *)pdata->ir_key);
 
+    gap_random_address_set_mode(GAP_RANDOM_ADDRESS_NON_RESOLVABLE);
+
     // GATT Client setup
     gatt_client_init();
 
@@ -464,7 +468,7 @@ static void init_advertising_data(void) {
         2, BLUETOOTH_DATA_TYPE_TX_POWER_LEVEL, 0,
     };
 
-    _Static_assert(sizeof(adv_data) <= 31, "31 octect max");
+    _Static_assert(sizeof(adv_data) <= 31, "31 octet max");
 
     gap_advertisements_set_data(sizeof(adv_data), (uint8_t *)adv_data);
 

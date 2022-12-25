@@ -58,13 +58,11 @@ test('missing main.py', async () => {
     var file = await readFile(
         path.resolve(__dirname, '__tests__', 'movehub-no-main-py.zip')
     );
-    try {
-        await FirmwareReader.load(file);
-        fail('FirmwareReader.load() should have failed');
-    } catch (err: any) {
-        expect(err.name).toMatch('FirmwareReaderError');
-        expect(err.code).toBe(FirmwareReaderErrorCode.MissingMainPy);
-    }
+    const reader = await FirmwareReader.load(file);
+    expect(await reader.readFirmwareBase()).toMatchSnapshot();
+    expect(await reader.readMetadata()).toMatchSnapshot();
+    expect(await reader.readMainPy()).toMatchSnapshot();
+    expect(await reader.readReadMeOss()).toMatchSnapshot();
 });
 
 test('missing ReadMe_OSS.txt', async () => {
@@ -91,9 +89,22 @@ test('reading data works', async () => {
     expect(await reader.readReadMeOss()).toMatchSnapshot();
 });
 
-describe('firmware name encoder', () => {
-    const metadata = { 'max-hub-name-size': 16 } as FirmwareMetadata;
-
+describe.each([
+    [
+        'v1.x',
+        {
+            'metadata-version': '1.1.0',
+            'max-hub-name-size': 16,
+        } as FirmwareMetadata,
+    ],
+    [
+        'v2.x',
+        {
+            'metadata-version': '2.0.0',
+            'hub-name-size': 16,
+        } as FirmwareMetadata,
+    ],
+])('firmware name encoder with %s', (version, metadata) => {
     test('empty name works', () => {
         expect(encodeHubName('', metadata)).toEqual(
             new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])

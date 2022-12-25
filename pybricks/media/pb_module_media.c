@@ -8,8 +8,6 @@
 #include "py/mphal.h"
 #include "py/runtime.h"
 
-#include <pybricks/media.h>
-
 #include <pybricks/util_pb/pb_error.h>
 
 STATIC const mp_rom_map_elem_t media_globals_table[] = {
@@ -21,5 +19,7 @@ const mp_obj_module_t pb_module_media = {
     .base = { &mp_type_module },
     .globals = (mp_obj_dict_t *)&pb_module_media_globals,
 };
+
+MP_REGISTER_MODULE(MP_QSTR_pybricks_dot_media, pb_module_media);
 
 #endif // PYBRICKS_PY_MEDIA

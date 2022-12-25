@@ -8,7 +8,7 @@
 #include <pbio/battery.h>
 
 #include <pbio/dcmotor.h>
-#include <pbio/math.h>
+#include <pbio/int_math.h>
 #include <pbio/servo.h>
 
 #include "py/mphal.h"
@@ -122,7 +122,7 @@ STATIC mp_obj_t common_Motor_make_new(const mp_obj_type_t *type, size_t n_args, 
 
     #if PYBRICKS_PY_COMMON_LOGGER
     // Create an instance of the Logger class
-    self->logger = common_Logger_obj_make_new(&self->srv->log, PBIO_SERVO_LOG_COLS);
+    self->logger = common_Logger_obj_make_new(&self->srv->log, PBIO_SERVO_LOGGER_NUM_COLS);
     #endif
 
     return MP_OBJ_FROM_PTR(self);
@@ -197,7 +197,7 @@ STATIC mp_obj_t common_Motor_run_time(size_t n_args, const mp_obj_t *pos_args, m
         PB_ARG_DEFAULT_TRUE(wait));
 
     mp_int_t speed = pb_obj_get_int(speed_in);
-    mp_int_t time = pbio_math_max(pb_obj_get_int(time_in), 0);
+    mp_int_t time = pbio_int_math_max(pb_obj_get_int(time_in), 0);
 
     pbio_control_on_completion_t then = pb_type_enum_get_value(then_in, &pb_enum_type_Stop);
 
@@ -355,6 +355,22 @@ STATIC mp_obj_t common_Motor_stalled(mp_obj_t self_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(common_Motor_stalled_obj, common_Motor_stalled);
 
+// pybricks._common.Motor.done
+STATIC mp_obj_t common_Motor_done(mp_obj_t self_in) {
+    common_Motor_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    return mp_obj_new_bool(pbio_control_is_done(&self->srv->control));
+}
+MP_DEFINE_CONST_FUN_OBJ_1(common_Motor_done_obj, common_Motor_done);
+
+// pybricks._common.Motor.load
+STATIC mp_obj_t common_Motor_load(mp_obj_t self_in) {
+    common_Motor_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    int32_t load;
+    pb_assert(pbio_servo_get_load(self->srv, &load));
+    return mp_obj_new_int(load);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(common_Motor_load_obj, common_Motor_load);
+
 // dir(pybricks.builtins.Motor)
 STATIC const mp_rom_map_elem_t common_Motor_locals_dict_table[] = {
     //
@@ -377,7 +393,9 @@ STATIC const mp_rom_map_elem_t common_Motor_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_run_angle), MP_ROM_PTR(&common_Motor_run_angle_obj) },
     { MP_ROM_QSTR(MP_QSTR_run_target), MP_ROM_PTR(&common_Motor_run_target_obj) },
     { MP_ROM_QSTR(MP_QSTR_stalled), MP_ROM_PTR(&common_Motor_stalled_obj) },
+    { MP_ROM_QSTR(MP_QSTR_done), MP_ROM_PTR(&common_Motor_done_obj) },
     { MP_ROM_QSTR(MP_QSTR_track_target), MP_ROM_PTR(&common_Motor_track_target_obj) },
+    { MP_ROM_QSTR(MP_QSTR_load), MP_ROM_PTR(&common_Motor_load_obj) },
 };
 MP_DEFINE_CONST_DICT(common_Motor_locals_dict, common_Motor_locals_dict_table);
 

@@ -1,46 +1,68 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2021 The Pybricks Authors
+// Copyright (c) 2022 The Pybricks Authors
+
+#include <pbsys/config.h>
+
+#if PBSYS_CONFIG_MAIN
 
 #include <stdint.h>
 
 #include <pbdrv/reset.h>
+#include <pbdrv/usb.h>
 #include <pbio/main.h>
+#include <pbsys/core.h>
 #include <pbsys/main.h>
 #include <pbsys/status.h>
-#include <pbsys/user_program.h>
 
-static void *pbsys_main_jmp_buf[5];
-
-static void pb_sys_main_check_for_shutdown(void) {
-    if (pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN)) {
-        pbio_set_event_hook(NULL);
-        __builtin_longjmp(pbsys_main_jmp_buf, 1);
-    }
-}
+#include "program_load.h"
+#include "program_stop.h"
+#include <pbsys/program_stop.h>
+#include <pbsys/bluetooth.h>
 
 /**
- * Initializes the PBIO library and runs custom main program.
- *
- * The main program may be abruptly ended when shutting down the hub.
+ * Initializes the PBIO library, runs custom main program, and handles shutdown.
  *
  * @param [in]  main    The main program.
  */
-void pbsys_main(pbsys_main_t main) {
-    pbio_init();
+int main(int argc, char **argv) {
 
-    // REVISIT: __builtin_setjmp() only saves a couple registers, so using it
-    // could cause problems if we add more to this function. However, since we
-    // use -nostdlib compile flag, we don't have setjmp(). We should be safe
-    // for now though since we don't use any local variables after the longjmp.
-    if (__builtin_setjmp(pbsys_main_jmp_buf) == 0) {
-        // REVISIT: we could save a few CPU cycles on each call to pbio_do_one_event()
-        // if we don't set this until shutdown is actually requested
-        pbio_set_event_hook(pb_sys_main_check_for_shutdown);
-        main();
-    } else {
-        // in case we jumped out of the middle of a user program
-        pbsys_user_program_unprepare();
+    pbio_init();
+    pbsys_init();
+
+    // Keep loading and running user programs until shutdown is requested.
+    while (!pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN_REQUEST)) {
+
+        // Receive a program. This cancels itself on shutdown.
+        static pbsys_main_program_t program;
+        pbio_error_t err = pbsys_program_load_wait_command(&program);
+        if (err != PBIO_SUCCESS) {
+            continue;
+        }
+
+        // Prepare pbsys for running the program.
+        pbsys_status_set(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING);
+        pbsys_bluetooth_rx_set_callback(pbsys_main_stdin_event);
+
+        // Handle pending events triggered by the status change, such as
+        // starting status light animation.
+        while (pbio_do_one_event()) {
+        }
+
+        // Run the main application.
+        pbsys_main_run_program(&program);
+
+        // Get system back in idle state.
+        pbsys_status_clear(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING);
+        pbsys_bluetooth_rx_set_callback(NULL);
+        pbsys_program_stop_set_buttons(PBIO_BUTTON_CENTER);
+        pbio_stop_all(true);
     }
+
+    // Stop system processes and save user data before we shutdown.
+    pbsys_deinit();
+
+    // Now lower-level processes may shutdown and/or power off.
+    pbsys_status_set(PBIO_PYBRICKS_STATUS_SHUTDOWN);
 
     // The power could be held on due to someone pressing the center button
     // or USB being plugged in, so we have this loop to keep pumping events
@@ -50,6 +72,18 @@ void pbsys_main(pbsys_main_t main) {
         // first time, otherwise the city hub turns itself back on sometimes.
         while (pbio_do_one_event()) {
         }
+
+        #if PBSYS_CONFIG_BATTERY_CHARGER
+        // On hubs with USB battery chargers, we can't turn off power while
+        // USB is connected, otherwise it disables the op-amp that provides
+        // the battery voltage to the ADC.
+        if (pbdrv_usb_get_bcd() != PBDRV_USB_BCD_NONE) {
+            continue;
+        }
+        #endif
+
         pbdrv_reset_power_off();
     }
 }
+
+#endif // PBSYS_CONFIG_MAIN

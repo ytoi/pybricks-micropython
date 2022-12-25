@@ -22,15 +22,15 @@
 
 
 // pybricks._common.LightMatrix class object
-typedef struct _common_Lightmatrix_obj_t {
+typedef struct _common_LightMatrix_obj_t {
     mp_obj_base_t base;
     pbio_light_matrix_t *light_matrix;
     uint8_t *data;
     uint8_t frames;
-} common_Lightmatrix_obj_t;
+} common_LightMatrix_obj_t;
 
 // Renews memory for a given number of frames
-STATIC void common_Lightmatrix__renew(common_Lightmatrix_obj_t *self, uint8_t frames) {
+STATIC void common_LightMatrix__renew(common_LightMatrix_obj_t *self, uint8_t frames) {
     // Matrix with/height
     size_t size = pbio_light_matrix_get_size(self->light_matrix);
 
@@ -42,24 +42,24 @@ STATIC void common_Lightmatrix__renew(common_Lightmatrix_obj_t *self, uint8_t fr
 }
 
 // pybricks._common.LightMatrix.orientation
-STATIC mp_obj_t common_Lightmatrix_orientation(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_orientation(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
+        common_LightMatrix_obj_t, self,
         PB_ARG_REQUIRED(up));
 
     pbio_light_matrix_set_orientation(self->light_matrix, pb_type_enum_get_value(up_in, &pb_enum_type_Side));
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_orientation_obj, 1, common_Lightmatrix_orientation);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_orientation_obj, 1, common_LightMatrix_orientation);
 
 // pybricks._common.LightMatrix.char
-STATIC mp_obj_t common_Lightmatrix_char(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_char(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
+        common_LightMatrix_obj_t, self,
         PB_ARG_REQUIRED(char));
 
-    // Argument must be a qstring or string
+    // Argument must be a qstr or string
     if (!mp_obj_is_qstr(char_in)) {
         pb_assert_type(char_in, &mp_type_str);
     }
@@ -70,21 +70,21 @@ STATIC mp_obj_t common_Lightmatrix_char(size_t n_args, const mp_obj_t *pos_args,
         pb_assert(PBIO_ERROR_INVALID_ARG);
     }
 
-    // Pick corresponding image and display it
+    // Pick corresponding icon and display it
     pb_assert(pbio_light_matrix_set_rows(self->light_matrix, pb_font_5x5[text[0] - 32]));
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_char_obj, 1, common_Lightmatrix_char);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_char_obj, 1, common_LightMatrix_char);
 
-static void common_Lightmatrix_image__extract(mp_obj_t image_in, size_t size, uint8_t *data) {
+static void common_LightMatrix_icon__extract(mp_obj_t icon_in, size_t size, uint8_t *data) {
 
     #if MICROPY_PY_BUILTINS_FLOAT
-    // If image is a matrix, copy data from there
-    if (mp_obj_is_type(image_in, &pb_type_Matrix)) {
+    // If icon is a matrix, copy data from there
+    if (mp_obj_is_type(icon_in, &pb_type_Matrix)) {
         for (size_t r = 0; r < size; r++) {
             for (size_t c = 0; c < size; c++) {
-                float scalar = pb_type_Matrix_get_scalar(image_in, r, c);
+                float scalar = pb_type_Matrix_get_scalar(icon_in, r, c);
                 scalar = scalar > 100 ? 100 : (scalar < 0 ? 0: scalar);
                 data[r * size + c] = (uint8_t)scalar;
             }
@@ -96,7 +96,7 @@ static void common_Lightmatrix_image__extract(mp_obj_t image_in, size_t size, ui
     // Unpack the main list of rows and get the requested sizes
     mp_obj_t *row_objs, *scalar_objs;
     size_t m;
-    mp_obj_get_array(image_in, &m, &row_objs);
+    mp_obj_get_array(icon_in, &m, &row_objs);
     if (m != size) {
         pb_assert(PBIO_ERROR_INVALID_ARG);
     }
@@ -115,28 +115,28 @@ static void common_Lightmatrix_image__extract(mp_obj_t image_in, size_t size, ui
     }
 }
 
-// pybricks._common.LightMatrix.image
-STATIC mp_obj_t common_Lightmatrix_image(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+// pybricks._common.LightMatrix.icon
+STATIC mp_obj_t common_LightMatrix_icon(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
-        PB_ARG_REQUIRED(image));
+        common_LightMatrix_obj_t, self,
+        PB_ARG_REQUIRED(icon));
 
     // Allocate and extract image data
     size_t size = pbio_light_matrix_get_size(self->light_matrix);
-    common_Lightmatrix__renew(self, 1);
-    common_Lightmatrix_image__extract(image_in, size, self->data);
+    common_LightMatrix__renew(self, 1);
+    common_LightMatrix_icon__extract(icon_in, size, self->data);
 
-    // Display the image
+    // Display the icon
     pb_assert(pbio_light_matrix_set_image(self->light_matrix, self->data));
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_image_obj, 1, common_Lightmatrix_image);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_icon_obj, 1, common_LightMatrix_icon);
 
 // pybricks._common.LightMatrix.on
-STATIC mp_obj_t common_Lightmatrix_on(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_on(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
+        common_LightMatrix_obj_t, self,
         PB_ARG_DEFAULT_INT(brightness, 100));
 
     uint8_t size = pbio_light_matrix_get_size(self->light_matrix);
@@ -151,22 +151,22 @@ STATIC mp_obj_t common_Lightmatrix_on(size_t n_args, const mp_obj_t *pos_args, m
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_on_obj, 1, common_Lightmatrix_on);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_on_obj, 1, common_LightMatrix_on);
 
 // pybricks._common.LightMatrix.off
-STATIC mp_obj_t common_Lightmatrix_off(mp_obj_t self_in) {
-    common_Lightmatrix_obj_t *self = MP_OBJ_TO_PTR(self_in);
+STATIC mp_obj_t common_LightMatrix_off(mp_obj_t self_in) {
+    common_LightMatrix_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     pb_assert(pbio_light_matrix_clear(self->light_matrix));
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(common_Lightmatrix_off_obj, common_Lightmatrix_off);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(common_LightMatrix_off_obj, common_LightMatrix_off);
 
 // pybricks._common.LightMatrix.number
-STATIC mp_obj_t common_Lightmatrix_number(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_number(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
+        common_LightMatrix_obj_t, self,
         PB_ARG_REQUIRED(number));
 
 
@@ -214,45 +214,45 @@ STATIC mp_obj_t common_Lightmatrix_number(size_t n_args, const mp_obj_t *pos_arg
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_number_obj, 1, common_Lightmatrix_number);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_number_obj, 1, common_LightMatrix_number);
 
 // pybricks._common.LightMatrix.animate
-STATIC mp_obj_t common_Lightmatrix_animate(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_animate(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
-        PB_ARG_REQUIRED(images),
+        common_LightMatrix_obj_t, self,
+        PB_ARG_REQUIRED(icons),
         PB_ARG_REQUIRED(interval));
 
     // Time between frames
     mp_int_t interval = pb_obj_get_int(interval_in);
 
-    // Unpack the list of images
-    mp_obj_t *image_objs;
+    // Unpack the list of icons
+    mp_obj_t *icon_objs;
     size_t n;
-    mp_obj_get_array(images_in, &n, &image_objs);
+    mp_obj_get_array(icons_in, &n, &icon_objs);
     if (n > UINT8_MAX || n < 2) {
         pb_assert(PBIO_ERROR_INVALID_ARG);
     }
 
     // Allocate animation data
     size_t size = pbio_light_matrix_get_size(self->light_matrix);
-    common_Lightmatrix__renew(self, n);
+    common_LightMatrix__renew(self, n);
 
     // Extract animation data
     for (uint8_t i = 0; i < n; i++) {
-        common_Lightmatrix_image__extract(image_objs[i], size, self->data + size * size * i);
+        common_LightMatrix_icon__extract(icon_objs[i], size, self->data + size * size * i);
     }
 
     // Activate the animation
     pbio_light_matrix_start_animation(self->light_matrix, self->data, self->frames, interval);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_animate_obj, 1, common_Lightmatrix_animate);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_animate_obj, 1, common_LightMatrix_animate);
 
 // pybricks._common.LightMatrix.pixel
-STATIC mp_obj_t common_Lightmatrix_pixel(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_pixel(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
+        common_LightMatrix_obj_t, self,
         PB_ARG_REQUIRED(row),
         PB_ARG_REQUIRED(column),
         PB_ARG_DEFAULT_INT(brightness, 100));
@@ -262,12 +262,12 @@ STATIC mp_obj_t common_Lightmatrix_pixel(size_t n_args, const mp_obj_t *pos_args
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_pixel_obj, 1, common_Lightmatrix_pixel);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_pixel_obj, 1, common_LightMatrix_pixel);
 
 // pybricks._common.LightMatrix.text
-STATIC mp_obj_t common_Lightmatrix_text(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t common_LightMatrix_text(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     PB_PARSE_ARGS_METHOD(n_args, pos_args, kw_args,
-        common_Lightmatrix_obj_t, self,
+        common_LightMatrix_obj_t, self,
         PB_ARG_REQUIRED(text),
         PB_ARG_DEFAULT_INT(on, 500),
         PB_ARG_DEFAULT_INT(off, 50));
@@ -299,34 +299,34 @@ STATIC mp_obj_t common_Lightmatrix_text(size_t n_args, const mp_obj_t *pos_args,
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Lightmatrix_text_obj, 1, common_Lightmatrix_text);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_LightMatrix_text_obj, 1, common_LightMatrix_text);
 
 // dir(pybricks.builtins.LightMatrix)
-STATIC const mp_rom_map_elem_t common_Lightmatrix_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_char),            MP_ROM_PTR(&common_Lightmatrix_char_obj)            },
-    { MP_ROM_QSTR(MP_QSTR_image),           MP_ROM_PTR(&common_Lightmatrix_image_obj)           },
-    { MP_ROM_QSTR(MP_QSTR_number),          MP_ROM_PTR(&common_Lightmatrix_number_obj)          },
-    { MP_ROM_QSTR(MP_QSTR_off),             MP_ROM_PTR(&common_Lightmatrix_off_obj)             },
-    { MP_ROM_QSTR(MP_QSTR_on),              MP_ROM_PTR(&common_Lightmatrix_on_obj)              },
-    { MP_ROM_QSTR(MP_QSTR_animate),         MP_ROM_PTR(&common_Lightmatrix_animate_obj)         },
-    { MP_ROM_QSTR(MP_QSTR_pixel),           MP_ROM_PTR(&common_Lightmatrix_pixel_obj)           },
-    { MP_ROM_QSTR(MP_QSTR_orientation),     MP_ROM_PTR(&common_Lightmatrix_orientation_obj)     },
-    { MP_ROM_QSTR(MP_QSTR_text),            MP_ROM_PTR(&common_Lightmatrix_text_obj)            },
+STATIC const mp_rom_map_elem_t common_LightMatrix_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_char),            MP_ROM_PTR(&common_LightMatrix_char_obj)            },
+    { MP_ROM_QSTR(MP_QSTR_icon),            MP_ROM_PTR(&common_LightMatrix_icon_obj)            },
+    { MP_ROM_QSTR(MP_QSTR_number),          MP_ROM_PTR(&common_LightMatrix_number_obj)          },
+    { MP_ROM_QSTR(MP_QSTR_off),             MP_ROM_PTR(&common_LightMatrix_off_obj)             },
+    { MP_ROM_QSTR(MP_QSTR_on),              MP_ROM_PTR(&common_LightMatrix_on_obj)              },
+    { MP_ROM_QSTR(MP_QSTR_animate),         MP_ROM_PTR(&common_LightMatrix_animate_obj)         },
+    { MP_ROM_QSTR(MP_QSTR_pixel),           MP_ROM_PTR(&common_LightMatrix_pixel_obj)           },
+    { MP_ROM_QSTR(MP_QSTR_orientation),     MP_ROM_PTR(&common_LightMatrix_orientation_obj)     },
+    { MP_ROM_QSTR(MP_QSTR_text),            MP_ROM_PTR(&common_LightMatrix_text_obj)            },
 };
-STATIC MP_DEFINE_CONST_DICT(common_Lightmatrix_locals_dict, common_Lightmatrix_locals_dict_table);
+STATIC MP_DEFINE_CONST_DICT(common_LightMatrix_locals_dict, common_LightMatrix_locals_dict_table);
 
 // type(pybricks.builtins.LightMatrix)
-STATIC const mp_obj_type_t pb_type_Lightmatrix = {
+STATIC const mp_obj_type_t pb_type_LightMatrix = {
     { &mp_type_type },
-    .name = MP_QSTR_Lightmatrix,
-    .locals_dict = (mp_obj_dict_t *)&common_Lightmatrix_locals_dict,
+    .name = MP_QSTR_LightMatrix,
+    .locals_dict = (mp_obj_dict_t *)&common_LightMatrix_locals_dict,
 };
 
 // pybricks._common.LightMatrix.__init__
-mp_obj_t pb_type_Lightmatrix_obj_new(pbio_light_matrix_t *light_matrix) {
+mp_obj_t pb_type_LightMatrix_obj_new(pbio_light_matrix_t *light_matrix) {
     // Create new light instance
-    common_Lightmatrix_obj_t *self = m_new_obj(common_Lightmatrix_obj_t);
-    self->base.type = &pb_type_Lightmatrix;
+    common_LightMatrix_obj_t *self = m_new_obj(common_LightMatrix_obj_t);
+    self->base.type = &pb_type_LightMatrix;
     self->light_matrix = light_matrix;
     pbio_light_matrix_set_orientation(light_matrix, PBIO_SIDE_TOP);
     return self;

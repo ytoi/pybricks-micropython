@@ -23,6 +23,10 @@
 #define PBDRV_CONFIG_BATTERY_ADC_CURRENT_SCALED_MAX 4178
 #define PBDRV_CONFIG_BATTERY_ADC_TYPE               (3)
 
+#define PBDRV_CONFIG_BLOCK_DEVICE                   (1)
+#define PBDRV_CONFIG_BLOCK_DEVICE_FLASH_STM32       (1)
+#define PBDRV_CONFIG_BLOCK_DEVICE_FLASH_STM32_SIZE  (16 * 1024) // Must match FLASH_USER_0 + FLASH_USER_1 in linker script
+
 #define PBDRV_CONFIG_BLUETOOTH                      (1)
 #define PBDRV_CONFIG_BLUETOOTH_STM32_CC2640         (1)
 #define PBDRV_CONFIG_BLUETOOTH_STM32_CC2640_HUB_ID  "\x80"
@@ -41,6 +45,12 @@
 
 #define PBDRV_CONFIG_GPIO                           (1)
 #define PBDRV_CONFIG_GPIO_STM32L4                   (1)
+
+#define PBDRV_CONFIG_IMU                            (1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32           (1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32_SIGN_X    (-1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32_SIGN_Y    (-1)
+#define PBDRV_CONFIG_IMU_LSM6S3TR_C_STM32_SIGN_Z    (1)
 
 #define PBDRV_CONFIG_IOPORT                         (1)
 #define PBDRV_CONFIG_IOPORT_LPF2                    (1)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2020-2021 The Pybricks Authors
+// Copyright (c) 2020-2022 The Pybricks Authors
 
 import JSZip, { JSZipObject } from 'jszip';
 import { PACKAGE_VERSION } from './version';
@@ -31,6 +31,16 @@ export enum HubType {
      * The LEGO Technic 4-port hub firmware file.
      */
     TechnicHub = 0x80,
+
+    /**
+     * The LEGO Technic Large hub (SPIKE Prime and MINDSTORMS Robot Inventor) firmware file.
+     */
+    PrimeHub = 0x81,
+
+    /**
+     * The LEGO Technic Small hub (SPIKE Essential) firmware file.
+     */
+    EssentialHub = 0x83,
 }
 
 /**
@@ -40,14 +50,16 @@ export const zipFileNameMap: ReadonlyMap<HubType, string> = new Map([
     [HubType.MoveHub, 'movehub.zip'],
     [HubType.CityHub, 'cityhub.zip'],
     [HubType.TechnicHub, 'technichub.zip'],
+    [HubType.PrimeHub, 'primehub.zip'],
+    [HubType.EssentialHub, 'essentialhub.zip'],
 ]);
 
 /**
- * Firmware metadata properties.
+ * Firmware metadata v1.0.0 properties.
  */
-export interface FirmwareMetadata {
+export type FirmwareMetadataV100 = {
     /** The version of the metadata itself. */
-    'metadata-version': string;
+    'metadata-version': '1.0.0';
     /** The version of the firmware binary. */
     'firmware-version': string;
     /** The type of hub the firmware runs on. */
@@ -62,13 +74,48 @@ export interface FirmwareMetadata {
     'user-mpy-offset': number;
     /** The maximum firmware size allowed on the hub. */
     'max-firmware-size': number;
-    /** The offset to where the hub name is stored in the firmware. (since  v1.1.0) */
-    'hub-name-offset'?: number;
-    /** The maximum size of the firmware name in bytes, including the zero-termination. (since  v1.1.0) */
-    'max-hub-name-size'?: number;
-    /** The SHA256 hash of the firmware. (since  v1.1.0) */
-    'firmware-sha256'?: string;
-}
+};
+
+/**
+ * Firmware metadata v1.1.0 properties.
+ */
+export type FirmwareMetadataV110 = Omit<
+    FirmwareMetadataV100,
+    'metadata-version'
+> & {
+    /** The version of the metadata itself. */
+    'metadata-version': '1.1.0';
+    /** The offset to where the hub name is stored in the firmware. */
+    'hub-name-offset': number;
+    /** The maximum size of the firmware name in bytes, including the zero-termination. */
+    'max-hub-name-size': number;
+};
+
+/**
+ * Firmware metadata v2.0.0 properties.
+ */
+export type FirmwareMetadataV200 = {
+    /** The version of the metadata itself. */
+    'metadata-version': '2.0.0';
+    /** The version of the firmware binary. */
+    'firmware-version': string;
+    /** The type of hub the firmware runs on. */
+    'device-id': HubType;
+    /** The type of checksum used by the device bootloader to verify the firmware. */
+    'checksum-type': 'sum' | 'crc32';
+    /** The data size for the checksum calculation. */
+    'checksum-size': number;
+    /** The offset to where the hub name is stored in the firmware. */
+    'hub-name-offset': number;
+    /** The maximum size of the firmware name in bytes, including the zero-termination. */
+    'hub-name-size': number;
+};
+
+/** Firmware metadata of any version. */
+export type FirmwareMetadata =
+    | FirmwareMetadataV100
+    | FirmwareMetadataV110
+    | FirmwareMetadataV200;
 
 /** Types of errors that can be raised by FirmwareReader. */
 export enum FirmwareReaderErrorCode {
@@ -78,8 +125,6 @@ export enum FirmwareReaderErrorCode {
     MissingFirmwareBaseBin,
     /** The zip file is missing the firmware.metadata.json file. */
     MissingMetadataJson,
-    /** The zip file is missing the main.py file. */
-    MissingMainPy,
     /** The zip file is missing the ReadMe_OSS.txt file. */
     MissingReadmeOssTxt,
 }
@@ -96,7 +141,6 @@ const firmwareReaderErrorMessage: ReadonlyMap<FirmwareReaderErrorCode, string> =
             FirmwareReaderErrorCode.MissingMetadataJson,
             'missing firmware.metadata.json',
         ],
-        [FirmwareReaderErrorCode.MissingMainPy, 'missing main.py'],
         [FirmwareReaderErrorCode.MissingReadmeOssTxt, 'ReadMe_OSS.txt'],
     ]);
 
@@ -190,12 +234,8 @@ export class FirmwareReader {
             );
         }
 
+        // main.py is optional
         reader.mainPy = zip.file('main.py');
-        if (!reader.mainPy) {
-            throw new FirmwareReaderError(
-                FirmwareReaderErrorCode.MissingMainPy
-            );
-        }
 
         reader.readMeOss = zip.file('ReadMe_OSS.txt');
         if (!reader.readMeOss) {
@@ -217,15 +257,52 @@ export class FirmwareReader {
         return JSON.parse(await this.metadata!.async('text'));
     }
 
-    /** Reads the main.py file from the zip file. */
-    public readMainPy(): Promise<string> {
-        return this.mainPy!.async('text');
+    /**
+     * Reads the main.py file from the zip file.
+     *
+     * Returns `undefined` if the file does not exist.
+     */
+    public readMainPy(): Promise<string | undefined> {
+        return this.mainPy?.async('text') ?? Promise.resolve(undefined);
     }
 
     /** Reads the ReadMe_OSS.txt file from the zip file. */
     public readReadMeOss(): Promise<string> {
         return this.readMeOss!.async('text');
     }
+}
+
+/**
+ * Type discriminator for metadata v1.0.0.
+ * @param metadata The metadata to test.
+ * @returns True if the metadata is v1.0.0.
+ */
+export function metadataIsV100(
+    metadata: FirmwareMetadata
+): metadata is FirmwareMetadataV100 {
+    return metadata['metadata-version'] === '1.0.0';
+}
+
+/**
+ * Type discriminator for metadata v1.1.0.
+ * @param metadata The metadata to test.
+ * @returns True if the metadata is v1.1.0.
+ */
+export function metadataIsV110(
+    metadata: FirmwareMetadata
+): metadata is FirmwareMetadataV110 {
+    return metadata['metadata-version'] === '1.1.0';
+}
+
+/**
+ * Type discriminator for metadata v2.0.0.
+ * @param metadata The metadata to test.
+ * @returns True if the metadata is v2.0.0.
+ */
+export function metadataIsV200(
+    metadata: FirmwareMetadata
+): metadata is FirmwareMetadataV200 {
+    return metadata['metadata-version'] === '2.0.0';
 }
 
 /**
@@ -242,11 +319,17 @@ export function encodeHubName(
     name: string,
     metadata: FirmwareMetadata
 ): Uint8Array {
-    if (metadata['max-hub-name-size'] === undefined) {
+    const nameSize = metadataIsV100(metadata)
+        ? undefined
+        : metadataIsV110(metadata)
+        ? metadata['max-hub-name-size']
+        : metadata['hub-name-size'];
+
+    if (nameSize === undefined) {
         throw new Error('firmware image does not support firmware name');
     }
 
-    const bytes = new Uint8Array(metadata['max-hub-name-size']);
+    const bytes = new Uint8Array(nameSize);
 
     // subarray ensures zero termination if encoded length is >= 'max-hub-name-size'.
     encoder.encodeInto(name, bytes.subarray(0, bytes.length - 1));

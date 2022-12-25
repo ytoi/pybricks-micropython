@@ -1,140 +1,115 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2015 Damien P. George
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2013, 2014 Damien P. George
+// Copyright (c) 2018-2022 The Pybricks Authors
+
+#include <stdint.h>
+#include <pbdrv/config.h>
 
 // options to control how MicroPython is built
 
-#define MICROPY_BANNER_NAME_AND_VERSION "Pybricks MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE
+#define MICROPY_HW_BOARD_NAME           "MINDSTORMS EV3 Brick"
+#define MICROPY_HW_MCU_NAME             "TI Sitara AM1808"
 
-#define MICROPY_ALLOC_PATH_MAX      (PATH_MAX)
-#define MICROPY_ENABLE_GC           (1)
-#define MICROPY_ENABLE_FINALISER    (0)
-#define MICROPY_STACK_CHECK         (0)
-#define MICROPY_COMP_CONST          (0)
-#define MICROPY_MEM_STATS           (0)
-#define MICROPY_DEBUG_PRINTERS      (0)
-#define MICROPY_READER_POSIX        (0)
-#define MICROPY_READER_VFS          (0)
-#define MICROPY_KBD_EXCEPTION       (1)
-#define MICROPY_HELPER_REPL         (1)
-#define MICROPY_HELPER_LEXER_UNIX   (0)
-#define MICROPY_ENABLE_SOURCE_LINE  (0)
-#define MICROPY_ERROR_REPORTING     (MICROPY_ERROR_REPORTING_TERSE)
-#define MICROPY_WARNINGS            (0)
-#define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF   (0)
-#define MICROPY_FLOAT_IMPL          (MICROPY_FLOAT_IMPL_NONE)
-#define MICROPY_LONGINT_IMPL        (MICROPY_LONGINT_IMPL_NONE)
-#define MICROPY_STREAMS_NON_BLOCK   (0)
-#define MICROPY_OPT_COMPUTED_GOTO   (0)
-#define MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE (0)
-#define MICROPY_CAN_OVERRIDE_BUILTINS (0)
-#define MICROPY_BUILTIN_METHOD_CHECK_SELF_ARG (0)
-#define MICROPY_CPYTHON_COMPAT      (0)
-#define MICROPY_PY_BUILTINS_BYTEARRAY (0)
-#define MICROPY_PY_BUILTINS_MEMORYVIEW (0)
-#define MICROPY_PY_BUILTINS_COMPILE (0)
-#define MICROPY_PY_BUILTINS_ENUMERATE (0)
-#define MICROPY_PY_BUILTINS_FILTER  (0)
-#define MICROPY_PY_BUILTINS_FROZENSET (0)
-#define MICROPY_PY_BUILTINS_REVERSED (0)
-#define MICROPY_PY_BUILTINS_SET     (0)
-#define MICROPY_PY_BUILTINS_SLICE   (0)
-#define MICROPY_PY_BUILTINS_STR_UNICODE (0)
-#define MICROPY_PY_BUILTINS_PROPERTY (0)
-#define MICROPY_PY_BUILTINS_MIN_MAX (0)
-#define MICROPY_PY___FILE__         (0)
-#define MICROPY_PY_MICROPYTHON_MEM_INFO (0)
-#define MICROPY_PY_GC               (0)
-#define MICROPY_PY_GC_COLLECT_RETVAL (0)
-#define MICROPY_PY_ARRAY            (0)
-#define MICROPY_PY_COLLECTIONS      (0)
-#define MICROPY_PY_MATH             (0)
-#define MICROPY_PY_CMATH            (0)
-#define MICROPY_PY_IO               (0)
-#define MICROPY_PY_IO_FILEIO        (0)
-#define MICROPY_PY_STRUCT           (0)
-#define MICROPY_PY_SYS              (1)
-#define MICROPY_PY_SYS_EXIT         (0)
-#define MICROPY_PY_SYS_PLATFORM     "linux"
-#define MICROPY_PY_SYS_MAXSIZE      (0)
-#define MICROPY_PY_SYS_STDFILES     (0)
-#define MICROPY_PY_CMATH            (0)
-#define MICROPY_PY_UCTYPES          (0)
-#define MICROPY_PY_UZLIB            (0)
-#define MICROPY_PY_UJSON            (0)
-#define MICROPY_PY_URE              (0)
-#define MICROPY_PY_UHEAPQ           (0)
-#define MICROPY_PY_UHASHLIB         (0)
-#define MICROPY_PY_UBINASCII        (0)
-#define MICROPY_USE_INTERNAL_PRINTF (0)
+#define PYBRICKS_HUB_NAME               "ev3"
+#define PYBRICKS_HUB_CLASS_NAME         (MP_QSTR_EV3Brick)
+#define PYBRICKS_HUB_EV3BRICK           (1)
 
-// extra built in names to add to the global namespace
-/*#define MICROPY_PORT_BUILTINS \
-    { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&mp_builtin_open_obj) },*/
+// Pybricks modules
+#define PYBRICKS_PY_COMMON              (1)
+#define PYBRICKS_PY_COMMON_CHARGER      (0)
+#define PYBRICKS_PY_COMMON_CONTROL      (0)
+#define PYBRICKS_PY_COMMON_IMU          (0)
+#define PYBRICKS_PY_COMMON_KEYPAD       (0)
+#define PYBRICKS_PY_COMMON_LIGHT_ARRAY  (0)
+#define PYBRICKS_PY_COMMON_LIGHT_MATRIX (0)
+#define PYBRICKS_PY_COMMON_LOGGER       (0)
+#define PYBRICKS_PY_COMMON_MOTORS       (0)
+#define PYBRICKS_PY_COMMON_SPEAKER      (0)
+#define PYBRICKS_PY_COMMON_SYSTEM       (0)
+#define PYBRICKS_PY_EV3DEVICES          (0)
+#define PYBRICKS_PY_EXPERIMENTAL        (0)
+#define PYBRICKS_PY_GEOMETRY            (1)
+#define PYBRICKS_PY_HUBS                (0)
+#define PYBRICKS_PY_IODEVICES           (0)
+#define PYBRICKS_PY_MEDIA               (0)
+#define PYBRICKS_PY_MEDIA_EV3DEV        (0)
+#define PYBRICKS_PY_NXTDEVICES          (0)
+#define PYBRICKS_PY_PARAMETERS          (1)
+#define PYBRICKS_PY_PARAMETERS_BUTTON   (1)
+#define PYBRICKS_PY_PARAMETERS_ICON     (0)
+#define PYBRICKS_PY_PUPDEVICES          (0)
+#define PYBRICKS_PY_ROBOTICS            (0)
+#define PYBRICKS_PY_ROBOTICS_DRIVEBASE_SPIKE (0)
+#define PYBRICKS_PY_TOOLS               (1)
 
-#define MICROPY_PORT_ROOT_POINTERS \
-    mp_obj_dict_t *pb_type_Color_dict; \
+// Pybricks options
+#define PYBRICKS_OPT_COMPILER                   (1)
+#define PYBRICKS_OPT_FLOAT                      (1)
+#define PYBRICKS_OPT_TERSE_ERR                  (0)
+#define PYBRICKS_OPT_EXTRA_MOD                  (1)
+#define PYBRICKS_OPT_CUSTOM_IMPORT              (1)
 
-//////////////////////////////////////////
-// Do not change anything beyond this line
-//////////////////////////////////////////
+// Start with config shared by all Pybricks ports.
+#include "../_common/mpconfigport.h"
 
-// Define to 1 to use undertested inefficient GC helper implementation
-// (if more efficient arch-specific one is not available).
-#ifndef MICROPY_GCREGS_SETJMP
-    #ifdef __mips__
-        #define MICROPY_GCREGS_SETJMP (1)
-    #else
-        #define MICROPY_GCREGS_SETJMP (0)
-    #endif
-#endif
+#define MICROPY_MPHALPORT_H "../_common/mphalport.h"
 
 // type definitions for the specific machine
 
-#ifdef __LP64__
-typedef long mp_int_t; // must be pointer size
-typedef unsigned long mp_uint_t; // must be pointer size
-#else
-// These are definitions for machines where sizeof(int) == sizeof(void*),
-// regardless for actual size.
-typedef int mp_int_t; // must be pointer size
-typedef unsigned int mp_uint_t; // must be pointer size
-#endif
+#define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))
 
-// Cannot include <sys/types.h>, as it may lead to symbol name clashes
-#if _FILE_OFFSET_BITS == 64 && !defined(__LP64__)
-typedef long long mp_off_t;
-#else
+// This port is intended to be 32-bit, but unfortunately, int32_t for
+// different targets may be defined in different ways - either as int
+// or as long. This requires different printf formatting specifiers
+// to print such value. So, we avoid int32_t and use int directly.
+#define UINT_FMT "%u"
+#define INT_FMT "%d"
+typedef int mp_int_t; // must be pointer size
+typedef unsigned mp_uint_t; // must be pointer size
+
 typedef long mp_off_t;
-#endif
+
+// We have inlined IRQ functions for efficiency (they are generally
+// 1 machine instruction).
+//
+// Note on IRQ state: you should not need to know the specific
+// value of the state variable, but rather just pass the return
+// value from disable_irq back to enable_irq.  If you really need
+// to know the machine-specific values, see irq.h.
+
+static inline void enable_irq(mp_uint_t state) {
+    // __set_PRIMASK(state);
+}
+
+static inline mp_uint_t disable_irq(void) {
+    // mp_uint_t state = __get_PRIMASK();
+    // __disable_irq();
+    // return state;
+    return 0;
+}
+
+#define MICROPY_BEGIN_ATOMIC_SECTION()     disable_irq()
+#define MICROPY_END_ATOMIC_SECTION(state)  enable_irq(state)
+
+#define MICROPY_VM_HOOK_LOOP \
+    do { \
+        extern int pbio_do_one_event(void); \
+        pbio_do_one_event(); \
+    } while (0);
+
+#define MICROPY_GC_HOOK_LOOP MICROPY_VM_HOOK_LOOP
+
+#define MICROPY_EVENT_POLL_HOOK \
+    do { \
+        extern void pb_event_poll_hook(void); \
+        pb_event_poll_hook(); \
+    } while (0);
 
 // We need to provide a declaration/definition of alloca()
-#ifdef __FreeBSD__
-#include <stdlib.h>
-#else
 #include <alloca.h>
-#endif
 
-#include "../pybricks_config.h"
+#define MP_STATE_PORT MP_STATE_VM
+
+#define MICROPY_PORT_ROOT_POINTERS \
+    mp_obj_dict_t *pb_type_Color_dict; \
+    const char *readline_hist[8];

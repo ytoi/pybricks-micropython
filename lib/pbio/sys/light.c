@@ -8,7 +8,6 @@
 #include <contiki.h>
 
 #include <pbdrv/charger.h>
-#include <pbdrv/config.h>
 #include <pbdrv/led.h>
 #include <pbio/color.h>
 #include <pbio/error.h>
@@ -30,6 +29,7 @@ typedef enum {
     PBSYS_STATUS_LIGHT_INDICATION_BLE_ADVERTISING_AND_LOW_VOLTAGE,
     PBSYS_STATUS_LIGHT_INDICATION_BLE_LOW_SIGNAL,
     PBSYS_STATUS_LIGHT_INDICATION_BLE_LOW_SIGNAL_AND_LOW_VOLTAGE,
+    PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN_REQUESTED,
     PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN,
 } pbsys_status_light_indication_t;
 
@@ -37,12 +37,21 @@ typedef enum {
 typedef struct {
     /** Color to display or ::PBIO_COLOR_NONE for system/user color. */
     pbio_color_t color;
-    /** Duration to display color in milliseconds divided by poll interval (50 ms) */
+    /**
+     * Duration to display the color, expressed as the number of poll
+     * intervals (50 ms each). Use 0 to ignore that element and restart the
+     * pattern. Use 255 to indicate that the element should last forever.
+     */
     uint8_t duration;
 } pbsys_status_light_indication_pattern_element_t;
 
 /** Sentinel value for status light indication patterns. */
-#define PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END { .duration = 0 }
+#define PBSYS_STATUS_LIGHT_DURATION_REPEAT (0)
+#define PBSYS_STATUS_LIGHT_DURATION_FOREVER (255)
+#define PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT \
+    { .duration = PBSYS_STATUS_LIGHT_DURATION_REPEAT }
+#define PBSYS_STATUS_LIGHT_INDICATION_PATTERN_FOREVER(color_num) \
+    { .color = color_num, .duration = PBSYS_STATUS_LIGHT_DURATION_FOREVER, }
 
 // Most indications patterns are selected to match the official LEGO firmware
 // with the exception that the BLE advertising color is blue in Pybricks instead
@@ -61,7 +70,7 @@ pbsys_status_light_indication_pattern[] = {
         { .color = PBIO_COLOR_ORANGE, .duration = 1 },
         { .color = PBIO_COLOR_NONE, .duration = 22 },
         { .color = PBIO_COLOR_BLACK, .duration = 1 },
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
     },
     [PBSYS_STATUS_LIGHT_INDICATION_LOW_VOLTAGE] =
         (const pbsys_status_light_indication_pattern_element_t[]) {
@@ -71,7 +80,7 @@ pbsys_status_light_indication_pattern[] = {
         { .color = PBIO_COLOR_BLACK, .duration = 4 },
         { .color = PBIO_COLOR_NONE, .duration = 16 },
         { .color = PBIO_COLOR_BLACK, .duration = 4 },
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
     },
     [PBSYS_STATUS_LIGHT_INDICATION_BLE_ADVERTISING] =
         (const pbsys_status_light_indication_pattern_element_t[]) {
@@ -79,7 +88,7 @@ pbsys_status_light_indication_pattern[] = {
         { .color = PBIO_COLOR_BLACK, .duration = 2 },
         { .color = PBIO_COLOR_BLUE, .duration = 1 },
         { .color = PBIO_COLOR_BLACK, .duration = 22 },
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
     },
     [PBSYS_STATUS_LIGHT_INDICATION_BLE_ADVERTISING_AND_LOW_VOLTAGE] =
         (const pbsys_status_light_indication_pattern_element_t[]) {
@@ -87,13 +96,13 @@ pbsys_status_light_indication_pattern[] = {
         { .color = PBIO_COLOR_BLACK, .duration = 2 },
         { .color = PBIO_COLOR_ORANGE, .duration = 1 },
         { .color = PBIO_COLOR_BLACK, .duration = 22 },
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
     },
     [PBSYS_STATUS_LIGHT_INDICATION_BLE_LOW_SIGNAL] =
         (const pbsys_status_light_indication_pattern_element_t[]) {
         { .color = PBIO_COLOR_NONE, .duration = 8 },
         { .color = PBIO_COLOR_WHITE, .duration = 1 },
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
     },
     [PBSYS_STATUS_LIGHT_INDICATION_BLE_LOW_SIGNAL_AND_LOW_VOLTAGE] =
         (const pbsys_status_light_indication_pattern_element_t[]) {
@@ -105,30 +114,38 @@ pbsys_status_light_indication_pattern[] = {
         { .color = PBIO_COLOR_BLACK, .duration = 4 },
         { .color = PBIO_COLOR_NONE, .duration = 8 },
         { .color = PBIO_COLOR_WHITE, .duration = 1 },
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
+    },
+    [PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN_REQUESTED] =
+        (const pbsys_status_light_indication_pattern_element_t[]) {
+        { .color = PBIO_COLOR_BLACK, .duration = 1 },
+        { .color = PBIO_COLOR_BLUE, .duration = 1 },
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
     },
     [PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN] =
         (const pbsys_status_light_indication_pattern_element_t[]) {
-        { .color = PBIO_COLOR_BLACK, .duration = 255 },
-        // REVISIT: we could make a new END type that prevents the pattern from
-        // repeating, this would allow us to make a shutdown animation
-        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_END
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_FOREVER(PBIO_COLOR_BLACK),
     },
 };
 
 typedef struct {
-    /** Color light struct for PBIO light implementation. */
-    pbio_color_light_t color_light;
-    /** The most recent user color value. */
-    pbio_color_hsv_t user_color;
-    /** The user program is currently allowed to control the status light. */
-    bool allow_user_update;
     /** The current status light indication. */
-    pbsys_status_light_indication_t indication;
+    uint8_t indication;
     /** The current index in the current status light indication pattern. */
     uint8_t pattern_index;
     /** The current duration count in the current status light indication pattern. */
     uint8_t pattern_count;
+} pbsys_status_light_pattern_state_t;
+
+typedef struct {
+    /** The most recent user color value. */
+    pbio_color_hsv_t user_color;
+    /** The user program is currently allowed to control the status light. */
+    bool allow_user_update;
+    /** The current pattern state. */
+    pbsys_status_light_pattern_state_t pattern_state;
+    /** Color light struct for PBIO light implementation. */
+    pbio_color_light_t color_light;
 } pbsys_status_light_t;
 
 static pbsys_status_light_t pbsys_status_light_instance;
@@ -160,17 +177,20 @@ void pbsys_status_light_init(void) {
 }
 
 static void pbsys_status_light_handle_status_change(void) {
-    pbsys_status_light_t *instance = &pbsys_status_light_instance;
+    pbsys_status_light_pattern_state_t *state = &pbsys_status_light_instance.pattern_state;
     pbsys_status_light_indication_t new_indication = PBSYS_STATUS_LIGHT_INDICATION_NONE;
     bool ble_advertising = pbsys_status_test(PBIO_PYBRICKS_STATUS_BLE_ADVERTISING);
     bool ble_low_signal = pbsys_status_test(PBIO_PYBRICKS_STATUS_BLE_LOW_SIGNAL);
     bool low_voltage = pbsys_status_test(PBIO_PYBRICKS_STATUS_BATTERY_LOW_VOLTAGE_WARNING);
     bool high_current = pbsys_status_test(PBIO_PYBRICKS_STATUS_BATTERY_HIGH_CURRENT);
+    bool shutdown_requested = pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN_REQUEST);
     bool shutdown = pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN);
 
     // This determines which indication has the highest precedence.
     if (shutdown) {
         new_indication = PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN;
+    } else if (shutdown_requested) {
+        new_indication = PBSYS_STATUS_LIGHT_INDICATION_SHUTDOWN_REQUESTED;
     } else if (ble_advertising && low_voltage) {
         new_indication = PBSYS_STATUS_LIGHT_INDICATION_BLE_ADVERTISING_AND_LOW_VOLTAGE;
     } else if (ble_advertising) {
@@ -186,10 +206,9 @@ static void pbsys_status_light_handle_status_change(void) {
     }
 
     // if the indication changed, then reset the indication pattern to the beginning
-    if (instance->indication != new_indication) {
-        instance->indication = new_indication;
-        instance->pattern_index = 0;
-        instance->pattern_count = 0;
+    if (state->indication != new_indication) {
+        state->indication = new_indication;
+        state->pattern_index = state->pattern_count = 0;
     }
 }
 
@@ -222,28 +241,109 @@ void pbsys_status_light_handle_event(process_event_t event, process_data_t data)
     }
 }
 
-void pbsys_status_light_poll(void) {
-    pbsys_status_light_t *instance = &pbsys_status_light_instance;
+/**
+ * Advances the light to the next state in the pattern.
+ *
+ * @param [in]  state       The light pattern state.
+ * @param [in]  pattern     The array of pattern arrays.
+ * @return                  The new color for the light.
+ */
+static pbio_color_t pbsys_status_light_pattern_next(pbsys_status_light_pattern_state_t *state,
+    const pbsys_status_light_indication_pattern_element_t *const *patterns) {
+
     const pbsys_status_light_indication_pattern_element_t *pattern =
-        pbsys_status_light_indication_pattern[instance->indication];
+        patterns[state->indication];
     pbio_color_t new_color = PBIO_COLOR_NONE;
 
     if (pattern != NULL) {
-        // if we are at the end of a pattern (indicated by duration == 0), wrap around to the beginning
-        if (pattern[instance->pattern_index].duration == 0) {
-            instance->pattern_index = 0;
+        // if we are at the end of a pattern, wrap around to the beginning
+        if (pattern[state->pattern_index].duration == PBSYS_STATUS_LIGHT_DURATION_REPEAT) {
+            state->pattern_index = 0;
             // count should already be set to 0 because of previous index increment
-            assert(instance->pattern_count == 0);
+            assert(state->pattern_count == 0);
         }
 
-        new_color = pattern[instance->pattern_index].color;
+        new_color = pattern[state->pattern_index].color;
 
-        // if we have exceeded the pattern duration for the current index, move to the next index
-        if (++instance->pattern_count >= pattern[instance->pattern_index].duration) {
-            instance->pattern_index++;
-            instance->pattern_count = 0;
+        // If the current index does not run forever and we have exceeded the
+        // pattern duration for the current index, move to the next index.
+        if (pattern[state->pattern_index].duration != PBSYS_STATUS_LIGHT_DURATION_FOREVER &&
+            ++state->pattern_count >= pattern[state->pattern_index].duration) {
+            state->pattern_index++;
+            state->pattern_count = 0;
         }
     }
+
+    return new_color;
+}
+
+#if PBSYS_CONFIG_STATUS_LIGHT_BATTERY
+
+#include <pbsys/battery.h>
+
+typedef enum {
+    /** Charger is not connected and battery is discharging. */
+    PBSYS_BATTERY_LIGHT_DISCHARGING,
+    /** Charger is connected and battery is charging and is not yet full. */
+    PBSYS_BATTERY_LIGHT_CHARGING,
+    /** Charger is connected and battery is charging and is "full". */
+    PBSYS_BATTERY_LIGHT_CHARGING_FULL,
+    /** Charger is connected and battery is discharging because it is past full. */
+    PBSYS_BATTERY_LIGHT_OVERCHARGE,
+    /** There is a problem with the battery or charger. */
+    PBSYS_BATTERY_LIGHT_FAULT,
+} pbsys_battery_light_state_t;
+
+static pbsys_status_light_pattern_state_t pbsys_battery_light_pattern_state;
+
+static const pbsys_status_light_indication_pattern_element_t *const
+pbsys_battery_light_patterns[] = {
+    [PBSYS_BATTERY_LIGHT_CHARGING] =
+        (const pbsys_status_light_indication_pattern_element_t[]) {
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_FOREVER(PBIO_COLOR_RED),
+    },
+    [PBSYS_BATTERY_LIGHT_CHARGING_FULL] =
+        (const pbsys_status_light_indication_pattern_element_t[]) {
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_FOREVER(PBIO_COLOR_GREEN),
+    },
+    [PBSYS_BATTERY_LIGHT_OVERCHARGE] =
+        (const pbsys_status_light_indication_pattern_element_t[]) {
+        { .color = PBIO_COLOR_GREEN, .duration = 56 },
+        { .color = PBIO_COLOR_BLACK, .duration = 4 },
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
+    },
+    [PBSYS_BATTERY_LIGHT_FAULT] =
+        (const pbsys_status_light_indication_pattern_element_t[]) {
+        { .color = PBIO_COLOR_YELLOW, .duration = 10 },
+        { .color = PBIO_COLOR_BLACK, .duration = 10 },
+        PBSYS_STATUS_LIGHT_INDICATION_PATTERN_REPEAT
+    },
+};
+
+pbsys_battery_light_state_t pbsys_battery_light_get_state(void) {
+    switch (pbdrv_charger_get_status()) {
+        case PBDRV_CHARGER_STATUS_CHARGE:
+            if (pbsys_battery_is_full()) {
+                return PBSYS_BATTERY_LIGHT_CHARGING_FULL;
+            }
+
+            return PBSYS_BATTERY_LIGHT_CHARGING;
+        case PBDRV_CHARGER_STATUS_COMPLETE:
+            return PBSYS_BATTERY_LIGHT_OVERCHARGE;
+        case PBDRV_CHARGER_STATUS_FAULT:
+            return PBSYS_BATTERY_LIGHT_FAULT;
+        default:
+            return PBSYS_BATTERY_LIGHT_DISCHARGING;
+    }
+}
+
+#endif // PBSYS_CONFIG_STATUS_LIGHT_BATTERY
+
+void pbsys_status_light_poll(void) {
+    pbsys_status_light_t *instance = &pbsys_status_light_instance;
+
+    pbio_color_t new_color = pbsys_status_light_pattern_next(
+        &instance->pattern_state, pbsys_status_light_indication_pattern);
 
     // If the new system indication is not overriding the status light and a user
     // program is running, then we can allow the user program to directly change
@@ -268,35 +368,27 @@ void pbsys_status_light_poll(void) {
         }
     }
 
-    // REVISIT: We should be able to make this event driven instead of polled.
-    #if PBDRV_CONFIG_CHARGER
+    // REVISIT: We should be able to make updating the state event driven instead of polled.
+    #if PBSYS_CONFIG_STATUS_LIGHT_BATTERY
+
+    pbsys_battery_light_state_t new_state = pbsys_battery_light_get_state();
+
+    if (new_state != pbsys_battery_light_pattern_state.indication) {
+        pbsys_battery_light_pattern_state.indication = new_state;
+        pbsys_battery_light_pattern_state.pattern_count =
+            pbsys_battery_light_pattern_state.pattern_index = 0;
+    }
+    new_color = pbsys_status_light_pattern_next(
+        &pbsys_battery_light_pattern_state, pbsys_battery_light_patterns);
 
     // FIXME: battery light is currently hard-coded to id 1 on all platforms
     if (pbdrv_led_get_dev(1, &led) == PBIO_SUCCESS) {
-        pbio_color_t color;
-        switch (pbdrv_charger_get_status())
-        {
-            case PBDRV_CHARGER_STATUS_CHARGE:
-                color = PBIO_COLOR_RED;
-                break;
-            case PBDRV_CHARGER_STATUS_COMPLETE:
-                color = PBIO_COLOR_GREEN;
-                break;
-            case PBDRV_CHARGER_STATUS_FAULT:
-                // TODO: This state should flash like official LEGO firmware.
-                color = PBIO_COLOR_YELLOW;
-                break;
-            default:
-                color = PBIO_COLOR_NONE;
-                break;
-        }
-
         pbio_color_hsv_t hsv;
-        pbio_color_to_hsv(color, &hsv);
+        pbio_color_to_hsv(new_color, &hsv);
         pbdrv_led_set_hsv(led, &hsv);
     }
 
-    #endif // PBDRV_CONFIG_CHARGER
+    #endif // PBSYS_CONFIG_STATUS_LIGHT_BATTERY
 }
 
 #endif // PBSYS_CONFIG_STATUS_LIGHT

@@ -21,7 +21,8 @@
 
 #include <pybricks/parameters.h>
 
-void pb_package_import_all(void);
+void pb_package_pybricks_init(bool import_all);
+void pb_package_pybricks_deinit(void);
 
 #if PYBRICKS_PY_COMMON_CHARGER
 
@@ -41,15 +42,17 @@ typedef void (*pb_type_ColorLight_on_t)(void *context, const pbio_color_hsv_t *h
 mp_obj_t pb_type_ColorLight_external_obj_new(void *context, pb_type_ColorLight_on_t on);
 mp_obj_t common_ColorLight_internal_obj_new(pbio_color_light_t *light);
 
+#if PYBRICKS_PY_COMMON_LIGHT_ARRAY
 // pybricks._common.LightArray()
 mp_obj_t common_LightArray_obj_make_new(pb_device_t *pbdev, uint8_t light_mode, uint8_t number_of_lights);
+#endif
 
-#ifdef PYBRICKS_PY_COMMON_LIGHT_MATRIX
+#if PYBRICKS_PY_COMMON_LIGHT_MATRIX
 #include <pbio/light_matrix.h>
 // pybricks._common.LightMatrix()
 extern const uint8_t pb_digits_5x2[10][5];
 extern const uint8_t pb_font_5x5[95][5];
-mp_obj_t pb_type_Lightmatrix_obj_new(pbio_light_matrix_t *light_matrix);
+mp_obj_t pb_type_LightMatrix_obj_new(pbio_light_matrix_t *light_matrix);
 #endif
 
 #if PYBRICKS_PY_COMMON_KEYPAD
@@ -126,7 +129,7 @@ mp_obj_t pb_type_IMU_obj_new(mp_obj_t top_side_axis, mp_obj_t front_side_axis);
 
 #if PYBRICKS_PY_COMMON_SYSTEM
 
-extern const mp_obj_type_t pb_type_System;
+extern const mp_obj_module_t pb_type_System;
 
 #endif // PYBRICKS_PY_COMMON_SYSTEM
 

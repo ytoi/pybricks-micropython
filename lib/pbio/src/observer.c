@@ -8,7 +8,7 @@
 
 #include <pbio/angle.h>
 #include <pbio/dcmotor.h>
-#include <pbio/math.h>
+#include <pbio/int_math.h>
 #include <pbio/observer.h>
 #include <pbio/trajectory.h>
 
@@ -31,7 +31,7 @@
  * @param [in]  settings       Control settings, which includes stall settings.
  * @param [in]  angle          Angle to which the observer should be reset.
  */
-void pbio_observer_reset(pbio_observer_t *obs, pbio_control_settings_t *settings, pbio_angle_t *angle) {
+void pbio_observer_reset(pbio_observer_t *obs, pbio_control_settings_t *settings, const pbio_angle_t *angle) {
 
     // Save reference to settings.
     obs->settings = settings;
@@ -43,24 +43,36 @@ void pbio_observer_reset(pbio_observer_t *obs, pbio_control_settings_t *settings
 
     // Reset stall state.
     obs->stalled = false;
+
+    // Reset position differentiator.
+    pbio_differentiator_reset(&obs->differentiator, angle);
 }
 
 /**
  * Gets the observer state, which is the estimated state of the real system.
  *
  * @param [in]  obs            The observer instance.
- * @param [out] angle          Estimated angle in millidegrees.
- * @param [out] speed          Estimated speed in millidegrees/second.
+ * @param [out] speed_num      Speed in millidegrees/second as numeric derivative of angle.
+ * @param [out] angle_est      Model estimate of angle in millidegrees.
+ * @param [out] speed_est      Model estimate of speed in millidegrees/second.
  */
-void pbio_observer_get_estimated_state(pbio_observer_t *obs, pbio_angle_t *angle, int32_t *speed) {
+void pbio_observer_get_estimated_state(const pbio_observer_t *obs, int32_t *speed_num, pbio_angle_t *angle_est, int32_t *speed_est) {
     // Return angle in millidegrees.
-    *angle = obs->angle;
+    *angle_est = obs->angle;
 
     // Return speed in millidegrees per second.
-    *speed = obs->speed;
+    *speed_est = obs->speed;
+    *speed_num = obs->speed_numeric;
 }
 
-static void update_stall_state(pbio_observer_t *obs, uint32_t time, int32_t voltage, int32_t feedback_voltage) {
+static void update_stall_state(pbio_observer_t *obs, uint32_t time, pbio_dcmotor_actuation_t actuation, int32_t voltage, int32_t feedback_voltage) {
+
+    // Anything other than voltage actuation is not included in the observer
+    // model, so it should not cause any stall flags to be raised.
+    if (actuation != PBIO_DCMOTOR_ACTUATION_VOLTAGE) {
+        obs->stalled = false;
+        return;
+    }
 
     // Convert to forward motion to simplify checks.
     int32_t speed = obs->speed;
@@ -76,9 +88,11 @@ static void update_stall_state(pbio_observer_t *obs, uint32_t time, int32_t volt
         // Model is ahead of reality (and therefore pushing back negative),
         // indicating an unmodelled load.
         feedback_voltage < 0 &&
-        // Feedback voltage is more than half of what it would be on getting
+        // Feedback voltage is more 75% of what it would be on getting
         // fully stuck (where applied voltage equals feedback).
-        -feedback_voltage > voltage / 2
+        -feedback_voltage > (voltage * 3) / 4 &&
+        // Feedback voltage is nonnegligible, i.e. larger than friction torque.
+        voltage > 5 * pbio_observer_torque_to_voltage(obs->model, obs->model->torque_friction)
         ) {
         // If this is the rising edge of the stall flag, reset start time.
         if (!obs->stalled) {
@@ -92,6 +106,18 @@ static void update_stall_state(pbio_observer_t *obs, uint32_t time, int32_t volt
 }
 
 /**
+ * Gets observer feedback torque to keep it close to measured value.
+ *
+ * @param [in]  obs            The observer instance.
+ * @param [in]  angle          Measured angle used to correct the model.
+ * @return                     Feedback torque in uNm.
+ */
+int32_t pbio_observer_get_feedback_torque(pbio_observer_t *obs, const pbio_angle_t *angle) {
+    int32_t error = pbio_angle_diff_mdeg(angle, &obs->angle);
+    return pbio_control_settings_mul_by_gain(error, obs->model->gain);
+}
+
+/**
  * Predicts next system state and corrects the model using a measurement.
  *
  * @param [in]  obs            The observer instance.
@@ -100,7 +126,7 @@ static void update_stall_state(pbio_observer_t *obs, uint32_t time, int32_t volt
  * @param [in]  actuation      Actuation type currently applied to the motor.
  * @param [in]  voltage        If actuation type is voltage, this is the payload in mV.
  */
-void pbio_observer_update(pbio_observer_t *obs, uint32_t time, pbio_angle_t *angle, pbio_dcmotor_actuation_t actuation, int32_t voltage) {
+void pbio_observer_update(pbio_observer_t *obs, uint32_t time, const pbio_angle_t *angle, pbio_dcmotor_actuation_t actuation, int32_t voltage) {
 
     const pbio_observer_model_t *m = obs->model;
 
@@ -108,13 +134,16 @@ void pbio_observer_update(pbio_observer_t *obs, uint32_t time, pbio_angle_t *ang
         // TODO
     }
 
-    int32_t error = pbio_angle_diff_mdeg(angle, &obs->angle);
+    // Update numerical derivative as speed sanity check.
+    obs->speed_numeric = pbio_differentiator_get_speed(&obs->differentiator, angle);
 
     // Apply observer error feedback as voltage.
-    int32_t feedback_voltage = pbio_observer_torque_to_voltage(m, pbio_control_settings_mul_by_gain(error, m->gain));
+    int32_t feedback_voltage = pbio_observer_torque_to_voltage(m,
+        pbio_observer_get_feedback_torque(obs, angle)
+        );
 
     // Check stall condition.
-    update_stall_state(obs, time, voltage, feedback_voltage);
+    update_stall_state(obs, time, actuation, voltage, feedback_voltage);
 
     // The observer will get the applied voltage plus the feedback voltage to
     // keep it in sync with the real system.
@@ -129,16 +158,16 @@ void pbio_observer_update(pbio_observer_t *obs, uint32_t time, pbio_angle_t *ang
         PRESCALE_CURRENT * obs->current / m->d_angle_d_current +
         PRESCALE_VOLTAGE * voltage / m->d_angle_d_voltage +
         PRESCALE_TORQUE * torque / m->d_angle_d_torque);
-    int32_t speed_next = 0 +
+    int32_t speed_next = pbio_int_math_clamp(0 +
         PRESCALE_SPEED * obs->speed / m->d_speed_d_speed +
         PRESCALE_CURRENT * obs->current / m->d_speed_d_current +
         PRESCALE_VOLTAGE * voltage / m->d_speed_d_voltage +
-        PRESCALE_TORQUE * torque / m->d_speed_d_torque;
-    int32_t current_next = 0 +
+        PRESCALE_TORQUE * torque / m->d_speed_d_torque, MAX_NUM_SPEED);
+    int32_t current_next = pbio_int_math_clamp(0 +
         PRESCALE_SPEED * obs->speed / m->d_current_d_speed +
         PRESCALE_CURRENT * obs->current / m->d_current_d_current +
         PRESCALE_VOLTAGE * voltage / m->d_current_d_voltage +
-        PRESCALE_TORQUE * torque / m->d_current_d_torque;
+        PRESCALE_TORQUE * torque / m->d_current_d_torque, MAX_NUM_CURRENT);
 
     // TODO: Better friction model.
     if ((speed_next < 0) != (speed_next - PRESCALE_TORQUE * torque / m->d_speed_d_torque < 0)) {
@@ -159,7 +188,7 @@ void pbio_observer_update(pbio_observer_t *obs, uint32_t time, pbio_angle_t *ang
  * @param [out] stall_duration  For how long it has been stalled.
  * @return                      True if stalled, false if not.
  */
-bool pbio_observer_is_stalled(pbio_observer_t *obs, uint32_t time, uint32_t *stall_duration) {
+bool pbio_observer_is_stalled(const pbio_observer_t *obs, uint32_t time, uint32_t *stall_duration) {
     // Return stall flag, if stalled for some time.
     if (obs->stalled && time - obs->stall_start > obs->settings->stall_time) {
         *stall_duration = time - obs->stall_start;
@@ -171,18 +200,18 @@ bool pbio_observer_is_stalled(pbio_observer_t *obs, uint32_t time, uint32_t *sta
 
 int32_t pbio_observer_get_feedforward_torque(const pbio_observer_model_t *model, int32_t rate_ref, int32_t acceleration_ref) {
 
-    int32_t friction_compensation_torque = model->torque_friction * pbio_math_sign(rate_ref);
-    int32_t back_emf_compensation_torque = PRESCALE_SPEED * rate_ref / model->d_torque_d_speed;
-    int32_t acceleration_torque = PRESCALE_ACCELERATION * acceleration_ref / model->d_torque_d_acceleration;
+    int32_t friction_compensation_torque = model->torque_friction * pbio_int_math_sign(rate_ref);
+    int32_t back_emf_compensation_torque = PRESCALE_SPEED * pbio_int_math_clamp(rate_ref, MAX_NUM_SPEED) / model->d_torque_d_speed;
+    int32_t acceleration_torque = PRESCALE_ACCELERATION * pbio_int_math_clamp(acceleration_ref, MAX_NUM_ACCELERATION) / model->d_torque_d_acceleration;
 
     // Total feedforward torque
-    return friction_compensation_torque + back_emf_compensation_torque + acceleration_torque;
+    return pbio_int_math_clamp(friction_compensation_torque + back_emf_compensation_torque + acceleration_torque, MAX_NUM_TORQUE);
 }
 
 int32_t pbio_observer_torque_to_voltage(const pbio_observer_model_t *model, int32_t desired_torque) {
-    return PRESCALE_TORQUE * desired_torque / model->d_voltage_d_torque;
+    return PRESCALE_TORQUE * pbio_int_math_clamp(desired_torque, MAX_NUM_TORQUE) / model->d_voltage_d_torque;
 }
 
 int32_t pbio_observer_voltage_to_torque(const pbio_observer_model_t *model, int32_t voltage) {
-    return PRESCALE_VOLTAGE * voltage / model->d_torque_d_voltage;
+    return PRESCALE_VOLTAGE * pbio_int_math_clamp(voltage, MAX_NUM_VOLTAGE) / model->d_torque_d_voltage;
 }

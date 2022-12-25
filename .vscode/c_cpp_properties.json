@@ -18,8 +18,6 @@
                 "${workspaceFolder}/lib/btstack/src",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
-                "${workspaceFolder}/lib/littlefs",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/lsm6ds3tr_c_STdC/driver",
                 "${workspaceFolder}/lib/pbio/drv/usb/stm32_usbd",
@@ -37,8 +35,7 @@
                 "STM32F413xx",
                 "STM32_H=<stm32f4xx.h>",
                 "STM32_HAL_H=<stm32f4xx_hal.h>",
-                "USE_FULL_LL_DRIVER",
-                "FIXMATH_NO_CTYPE"
+                "USE_FULL_LL_DRIVER"
             ],
             "compilerArgs": [
                 "-Wall",
@@ -59,13 +56,49 @@
             "intelliSenseMode": "gcc-arm"
         },
         {
+            "name": "ev3rt",
+            "includePath": [
+                "${workspaceFolder}/lib/contiki-core",
+                "${workspaceFolder}/lib/lego",
+                "${workspaceFolder}/lib/lwrb/src/include",
+                "${workspaceFolder}/lib/pbio/include",
+                "${workspaceFolder}/lib/pbio/platform/ev3rt",
+                "${workspaceFolder}",
+                "${workspaceFolder}/bricks/ev3rt",
+                "${workspaceFolder}/bricks/ev3rt/build",
+                "${workspaceFolder}/micropython",
+                "${workspaceFolder}/lib/ev3rt-lib/sdk/common",
+                "${workspaceFolder}/lib/ev3rt-lib",
+                "${workspaceFolder}/lib/ev3rt-lib/include",
+                "${workspaceFolder}/lib/ev3rt-lib/target/ev3_gcc",
+                "${workspaceFolder}/lib/ev3rt-lib/arch/arm_gcc/am1808",
+                "${workspaceFolder}/lib/ev3rt-lib/arch/arm_gcc/common",
+                "${workspaceFolder}/lib/ev3rt-lib/arch/gcc"
+            ],
+            "defines": [
+                "MICROPY_ROM_TEXT_COMPRESSION",
+                "HSE_VALUE=16000000",
+                "TOPPERS_OMIT_TECS"
+            ],
+            "compilerArgs": [
+                "-Wall",
+                "-Werror",
+                "-Wextra",
+                "-Wno-unused-parameter",
+                "-Wdouble-promotion",
+                "-nostdlib",
+            ],
+            "cStandard": "c11",
+            "intelliSenseMode": "gcc-arm"
+        },
+        {
             "name": "movehub",
             "includePath": [
                 "${workspaceFolder}/micropython/lib/cmsis/inc",
                 "${workspaceFolder}/micropython/lib/stm32lib/CMSIS/STM32F0xx/Include",
+                "${workspaceFolder}/micropython/lib/stm32lib/STM32F0xx_HAL_Driver/Inc",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio/include",
                 "${workspaceFolder}/lib/pbio/platform/move_hub",
@@ -81,8 +114,7 @@
                 "STM32F070xB",
                 "STM32_H=<stm32f0xx.h>",
                 "STM32_HAL_H=<stm32f0xx_hal.h>",
-                "USE_FULL_LL_DRIVER",
-                "FIXMATH_NO_CTYPE"
+                "USE_FULL_LL_DRIVER"
             ],
             "compilerArgs": [
                 "-Wall",
@@ -109,7 +141,6 @@
                 "${workspaceFolder}/lib/ble5stack/central",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio/include",
                 "${workspaceFolder}/lib/pbio/platform/city_hub",
@@ -124,8 +155,7 @@
                 "STM32F030xC",
                 "STM32_H=<stm32f0xx.h>",
                 "STM32_HAL_H=<stm32f0xx_hal.h>",
-                "USE_FULL_LL_DRIVER",
-                "FIXMATH_NO_CTYPE"
+                "USE_FULL_LL_DRIVER"
             ],
             "compilerArgs": [
                 "-Wall",
@@ -152,7 +182,6 @@
                 "${workspaceFolder}/lib/ble5stack/central",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio/include",
                 "${workspaceFolder}/lib/pbio/platform/technic_hub",
@@ -171,8 +200,7 @@
                 "STM32L431xx",
                 "STM32_H=<stm32l4xx.h>",
                 "STM32_HAL_H=<stm32l4xx_hal.h>",
-                "USE_FULL_LL_DRIVER",
-                "FIXMATH_NO_CTYPE"
+                "USE_FULL_LL_DRIVER"
             ],
             "compilerArgs": [
                 "-Wall",
@@ -204,8 +232,6 @@
                 "${workspaceFolder}/lib/btstack/src",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
-                "${workspaceFolder}/lib/littlefs",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/lsm6ds3tr_c_STdC/driver",
                 "${workspaceFolder}/lib/pbio/drv/usb/stm32_usbd",
@@ -223,8 +249,7 @@
                 "STM32F413xx",
                 "STM32_H=<stm32f4xx.h>",
                 "STM32_HAL_H=<stm32f4xx_hal.h>",
-                "USE_FULL_LL_DRIVER",
-                "FIXMATH_NO_CTYPE"
+                "USE_FULL_LL_DRIVER"
             ],
             "compilerArgs": [
                 "-Wall",
@@ -250,19 +275,18 @@
                 "${workspaceFolder}/bricks/nxt",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
-                "${workspaceFolder}/bricks/nxt/nxt-firmware-drivers",
+                "${workspaceFolder}/lib/nxos/nxos",
                 "${workspaceFolder}/lib/pbio/include",
                 "${workspaceFolder}/lib/pbio/platform/nxt",
                 "${workspaceFolder}/lib/pbio",
                 "${workspaceFolder}/bricks/nxt/build",
                 "${workspaceFolder}/lib/pbio/include",
-                "${workspaceFolder}"
+                "${workspaceFolder}",
+                "${workspaceFolder}/micropython"
             ],
             "defines": [
-                "MICROPY_ROM_TEXT_COMPRESSION",
-                "FIXMATH_NO_CTYPE"
+                "MICROPY_ROM_TEXT_COMPRESSION"
             ],
             "compilerArgs": [
                 "-mthumb",
@@ -280,7 +304,6 @@
                 "${workspaceFolder}/lib/stm32lib/CMSIS/STM32F4xx/Include",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio/include",
                 "${workspaceFolder}/lib/pbio/platform/debug",
@@ -294,8 +317,7 @@
                 "HSE_VALUE=8000000",
                 "STM32F070xB",
                 "STM32_H=<stm32f4xx.h>",
-                "STM32_HAL_H=<stm32f4xx_hal.h>",
-                "FIXMATH_NO_CTYPE"
+                "STM32_HAL_H=<stm32f4xx_hal.h>"
             ],
             "compilerArgs": [
                 "-Wall",
@@ -325,7 +347,6 @@
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/ev3dev/include",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio",
                 "${workspaceFolder}/lib/pbio/include",
@@ -354,7 +375,6 @@
                 "${workspaceFolder}/bricks/virtualhub/build",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio",
                 "${workspaceFolder}/lib/pbio/include",
@@ -381,7 +401,6 @@
                 "${workspaceFolder}/lib/btstack/src",
                 "${workspaceFolder}/lib/contiki-core",
                 "${workspaceFolder}/lib/lego",
-                "${workspaceFolder}/lib/libfixmath/libfixmath",
                 "${workspaceFolder}/lib/lwrb/src/include",
                 "${workspaceFolder}/lib/pbio",
                 "${workspaceFolder}/lib/pbio/include",

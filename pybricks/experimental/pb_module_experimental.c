@@ -18,7 +18,6 @@
 
 #include <pybricks/util_pb/pb_error.h>
 
-#include <pybricks/experimental.h>
 #include <pybricks/robotics.h>
 
 #if PYBRICKS_HUB_EV3BRICK
@@ -54,74 +53,6 @@ STATIC mp_obj_t mod_experimental_pthread_raise(mp_obj_t thread_id_in, mp_obj_t e
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(mod_experimental_pthread_raise_obj, mod_experimental_pthread_raise);
 #endif // PYBRICKS_HUB_EV3BRICK
-
-#if (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
-
-#include <pybricks/util_pb/pb_flash.h>
-
-STATIC mp_obj_t experimental_flash_read_raw(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    PB_PARSE_ARGS_FUNCTION(n_args, pos_args, kw_args,
-        PB_ARG_REQUIRED(address),
-        PB_ARG_REQUIRED(len));
-
-    uint32_t read_address = mp_obj_get_int(address_in);
-    uint32_t read_len = mp_obj_get_int(len_in);
-
-    // Allocate read data
-    uint8_t *read_data = m_malloc(read_len);
-
-    // Read flash
-    pb_assert(pb_flash_raw_read(read_address, read_data, read_len));
-
-    // Return bytes read
-    return mp_obj_new_bytes(read_data, read_len);
-}
-MP_DEFINE_CONST_FUN_OBJ_KW(experimental_flash_read_raw_obj, 0, experimental_flash_read_raw);
-
-STATIC mp_obj_t experimental_flash_read_file(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    PB_PARSE_ARGS_FUNCTION(n_args, pos_args, kw_args,
-        PB_ARG_DEFAULT_NONE(path));
-
-    // Get file path
-    GET_STR_DATA_LEN(path_in, path, path_len);
-
-    // Mount the file system and open the file
-    uint32_t size;
-    pb_assert(pb_flash_file_open_get_size((const char *)path, &size));
-
-    // Read file contents
-    uint8_t *file_buf = m_new(uint8_t, size);
-    pb_assert(pb_flash_file_read(file_buf, size));
-
-    // Return data
-    return mp_obj_new_bytes(file_buf, size);
-}
-MP_DEFINE_CONST_FUN_OBJ_KW(experimental_flash_read_file_obj, 0, experimental_flash_read_file);
-
-STATIC mp_obj_t experimental_flash_write_file(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    PB_PARSE_ARGS_FUNCTION(n_args, pos_args, kw_args,
-        PB_ARG_REQUIRED(path),
-        PB_ARG_REQUIRED(data));
-
-    // Get file path
-    GET_STR_DATA_LEN(path_in, path, path_len);
-    GET_STR_DATA_LEN(data_in, data, data_len);
-
-    pb_assert(pb_flash_file_write((const char *)path, (const uint8_t *)data, data_len));
-
-    return mp_const_none;
-}
-// See also experimental_globals_table below. This function object is added there to make it importable.
-MP_DEFINE_CONST_FUN_OBJ_KW(experimental_flash_write_file_obj, 0, experimental_flash_write_file);
-
-// pybricks.experimental.restore_firmware
-STATIC mp_obj_t experimental_restore_firmware(void) {
-    pb_assert(pb_flash_restore_firmware());
-    return mp_const_none;
-}
-MP_DEFINE_CONST_FUN_OBJ_0(experimental_restore_firmware_obj, experimental_restore_firmware);
-
-#endif // (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
 
 // pybricks.experimental.hello_world
 STATIC mp_obj_t experimental_hello_world(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
@@ -161,18 +92,14 @@ STATIC mp_obj_t experimental_hello_world(size_t n_args, const mp_obj_t *pos_args
 // See also experimental_globals_table below. This function object is added there to make it importable.
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(experimental_hello_world_obj, 0, experimental_hello_world);
 
-
 STATIC const mp_rom_map_elem_t experimental_globals_table[] = {
     #if PYBRICKS_HUB_EV3BRICK
-    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_experimental_c) },
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_experimental) },
     { MP_ROM_QSTR(MP_QSTR___init__), MP_ROM_PTR(&mod_experimental___init___obj) },
     { MP_ROM_QSTR(MP_QSTR_pthread_raise), MP_ROM_PTR(&mod_experimental_pthread_raise_obj) },
     #else
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_experimental) },
     #endif // PYBRICKS_HUB_EV3BRICK
-    #if (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
-    { MP_ROM_QSTR(MP_QSTR_restore_firmware), MP_ROM_PTR(&experimental_restore_firmware_obj) },
-    #endif // (PYBRICKS_HUB_PRIMEHUB || PYBRICKS_HUB_ESSENTIALHUB)
     { MP_ROM_QSTR(MP_QSTR_hello_world), MP_ROM_PTR(&experimental_hello_world_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(pb_module_experimental_globals, experimental_globals_table);
@@ -181,5 +108,12 @@ const mp_obj_module_t pb_module_experimental = {
     .base = { &mp_type_module },
     .globals = (mp_obj_dict_t *)&pb_module_experimental_globals,
 };
+
+#if PYBRICKS_RUNS_ON_EV3DEV
+// ev3dev extends the C module in Python
+MP_REGISTER_MODULE(MP_QSTR__experimental, pb_module_experimental);
+#else
+MP_REGISTER_MODULE(MP_QSTR_pybricks_dot_experimental, pb_module_experimental);
+#endif
 
 #endif // PYBRICKS_PY_EXPERIMENTAL

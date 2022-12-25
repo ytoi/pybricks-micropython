@@ -2,12 +2,13 @@
 // Copyright (c) 2018-2022 The Pybricks Authors
 
 #include <stdlib.h>
+#include <assert.h>
 
 #include <pbdrv/clock.h>
 
 #include <pbio/config.h>
 #include <pbio/control.h>
-#include <pbio/math.h>
+#include <pbio/int_math.h>
 #include <pbio/trajectory.h>
 #include <pbio/integrator.h>
 
@@ -17,6 +18,7 @@
  * @return                    Wall time in control ticks.
  */
 uint32_t pbio_control_get_time_ticks(void) {
+    assert(PBIO_TRAJECTORY_TICKS_PER_MS == 10);
     return pbdrv_clock_get_100us();
 }
 
@@ -58,18 +60,18 @@ static bool pbio_control_check_completion(pbio_control_t *ctl, uint32_t time, pb
     // once the sign of the angle error differs from the speed sign.
     int32_t position_remaining = pbio_angle_diff_mdeg(&end->position, &state->position);
     if (end->speed != 0) {
-        return pbio_math_sign(position_remaining) != pbio_math_sign(end->speed);
+        return pbio_int_math_sign(position_remaining) != pbio_int_math_sign(end->speed);
     }
 
     // For zero final speed, we need to at least stand still, so return false
     // when we're still moving faster than the tolerance.
-    if (pbio_math_abs(state->speed_estimate) > ctl->settings.speed_tolerance) {
+    if (pbio_int_math_abs(state->speed) > ctl->settings.speed_tolerance) {
         return false;
     }
 
     // Once we stand still, we're complete if the distance to the
     // target is equal to or less than the allowed tolerance.
-    return pbio_math_abs(position_remaining) <= ctl->settings.position_tolerance;
+    return pbio_int_math_abs(position_remaining) <= ctl->settings.position_tolerance;
 }
 
 /**
@@ -120,7 +122,7 @@ void pbio_control_update(pbio_control_t *ctl, uint32_t time_now, pbio_control_st
     int32_t torque_integral = pbio_control_settings_mul_by_gain(integral_error, ctl->settings.pid_ki);
 
     // Total torque signal, capped by the actuation limit
-    int32_t torque = pbio_math_clamp(torque_proportional + torque_integral + torque_derivative, ctl->settings.actuation_max);
+    int32_t torque = pbio_int_math_clamp(torque_proportional + torque_integral + torque_derivative, ctl->settings.actuation_max);
 
     // This completes the computation of the control signal.
     // The next steps take care of handling windup, or triggering a stop if we are on target.
@@ -128,17 +130,17 @@ void pbio_control_update(pbio_control_t *ctl, uint32_t time_now, pbio_control_st
     // We want to stop building up further errors if we are at the proportional torque limit. So, we pause the trajectory
     // if we get at this limit. We wait a little longer though, to make sure it does not fall back to below the limit
     // within one sample, which we can predict using the current rate times the loop time, with a factor two tolerance.
-    int32_t windup_margin = pbio_control_settings_mul_by_loop_time(pbio_math_abs(state->speed_estimate)) * 2;
+    int32_t windup_margin = pbio_control_settings_mul_by_loop_time(pbio_int_math_abs(state->speed)) * 2;
     int32_t max_windup_torque = ctl->settings.actuation_max + pbio_control_settings_mul_by_gain(windup_margin, ctl->settings.pid_kp);
 
     // Position anti-windup: pause trajectory or integration if falling behind despite using maximum torque
     bool pause_integration =
         // Pause if proportional torque is beyond maximum windup torque:
-        pbio_math_abs(torque_proportional) >= max_windup_torque &&
+        pbio_int_math_abs(torque_proportional) >= max_windup_torque &&
         // But not if we're trying to run in the other direction (else we can get unstuck by just reversing).
-        pbio_math_sign(torque_proportional) != -pbio_math_sign(speed_error) &&
+        pbio_int_math_sign(torque_proportional) != -pbio_int_math_sign(speed_error) &&
         // But not if we should be accelerating in the other direction (else we can get unstuck by just reversing).
-        pbio_math_sign(torque_proportional) != -pbio_math_sign(ref->acceleration);
+        pbio_int_math_sign(torque_proportional) != -pbio_int_math_sign(ref->acceleration);
 
     // Position anti-windup in case of angle control (accumulated position error may not get too high)
     if (pbio_control_type_is_position(ctl)) {
@@ -163,14 +165,14 @@ void pbio_control_update(pbio_control_t *ctl, uint32_t time_now, pbio_control_st
 
     // Check if controller is stalled
     ctl->stalled = pbio_control_type_is_position(ctl) ?
-        pbio_position_integrator_stalled(&ctl->position_integrator, time_now, state->speed_estimate, ref->speed) :
-        pbio_speed_integrator_stalled(&ctl->speed_integrator, time_now, state->speed_estimate, ref->speed);
+        pbio_position_integrator_stalled(&ctl->position_integrator, time_now, state->speed, ref->speed) :
+        pbio_speed_integrator_stalled(&ctl->speed_integrator, time_now, state->speed, ref->speed);
 
     // Check if we are on target
     ctl->on_target = pbio_control_check_completion(ctl, ref->time, state, &ref_end);
 
     // Save (low-pass filtered) load for diagnostics
-    ctl->load = (ctl->load * (100 - PBIO_CONFIG_CONTROL_LOOP_TIME_MS) + torque * PBIO_CONFIG_CONTROL_LOOP_TIME_MS) / 100;
+    ctl->pid_average = (ctl->pid_average * (100 - PBIO_CONFIG_CONTROL_LOOP_TIME_MS) + torque * PBIO_CONFIG_CONTROL_LOOP_TIME_MS) / 100;
 
     // Decide actuation based on whether control is on target.
     if (!ctl->on_target) {
@@ -228,22 +230,37 @@ void pbio_control_update(pbio_control_t *ctl, uint32_t time_now, pbio_control_st
         }
     }
 
-    // Log control data.
-    int32_t log_data[] = {
-        ref->time - ctl->trajectory.start.time,
-        pbio_control_settings_ctl_to_app_long(&ctl->settings, &state->position),
-        0,
-        *actuation,
-        *control,
-        pbio_control_settings_ctl_to_app_long(&ctl->settings, &ref->position),
-        pbio_control_settings_ctl_to_app(&ctl->settings, ref->speed),
-        pbio_control_settings_ctl_to_app_long(&ctl->settings, &state->position_estimate),
-        pbio_control_settings_ctl_to_app(&ctl->settings, state->speed_estimate),
-        torque_proportional,
-        torque_integral,
-        torque_derivative,
-    };
-    pbio_logger_update(&ctl->log, log_data);
+    // Optionally log control data.
+    if (pbio_logger_is_active(&ctl->log)) {
+        int32_t log_data[] = {
+            // Column 0: Log time (added by logger).
+            // Column 1: Time since start of trajectory.
+            ref->time - ctl->trajectory.start.time,
+            // Column 2: Position in application units.
+            pbio_control_settings_ctl_to_app_long(&ctl->settings, &state->position),
+            // Column 3: Speed in application units.
+            pbio_control_settings_ctl_to_app(&ctl->settings, state->speed),
+            // Column 4: Actuation type (LSB 0--1), stall state (LSB 2), on target (LSB 3).
+            *actuation | (ctl->stalled << 2) | (ctl->on_target << 3),
+            // Column 5: Actuation payload, e.g. torque.
+            *control,
+            // Column 6: Reference position in application units.
+            pbio_control_settings_ctl_to_app_long(&ctl->settings, &ref->position),
+            // Column 7: Reference speed in application units.
+            pbio_control_settings_ctl_to_app(&ctl->settings, ref->speed),
+            // Column 8: Estimated position in application units.
+            pbio_control_settings_ctl_to_app_long(&ctl->settings, &state->position_estimate),
+            // Column 9: Estimated speed in application units.
+            pbio_control_settings_ctl_to_app(&ctl->settings, state->speed_estimate),
+            // Column 10: P term of PID control in (uNm).
+            torque_proportional,
+            // Column 12: I term of PID control in (uNm).
+            torque_integral,
+            // Column 13: D term of PID control in (uNm).
+            torque_derivative,
+        };
+        pbio_logger_add_row(&ctl->log, log_data);
+    }
 }
 
 /**
@@ -256,6 +273,53 @@ void pbio_control_stop(pbio_control_t *ctl) {
     ctl->type = PBIO_CONTROL_NONE;
     ctl->on_target = true;
     ctl->stalled = false;
+    ctl->pid_average = 0;
+}
+
+/**
+ * Sets the control type for the new maneuver and initializes the corresponding
+ * control status.
+ *
+ * @param [in]  ctl            The control instance.
+ * @param [in]  time_now       The wall time (ticks).
+ * @param [in]  type           Control type for the next maneuver.
+ * @param [in]  on_completion  What to do when reaching the target position.
+ */
+static void pbio_control_set_control_type(pbio_control_t *ctl, uint32_t time_now, pbio_control_type_t type, pbio_control_on_completion_t on_completion) {
+
+    // Setting none control type is the same as stopping.
+    if (type == PBIO_CONTROL_NONE) {
+        pbio_control_stop(ctl);
+        return;
+    }
+
+    // Set on completion action for this maneuver.
+    ctl->on_completion = on_completion;
+
+    // Reset done state. It will get the correct value during the next control
+    // update. REVISIT: Evaluate it here.
+    ctl->on_target = false;
+
+    // Exit if control type already set.
+    if (ctl->type == type) {
+        return;
+    }
+
+    // Reset stall state. It will get the correct value during the next control
+    // update. REVISIT: Evaluate it here.
+    ctl->stalled = false;
+
+    // Reset integrator for new control type.
+    if (type == PBIO_CONTROL_POSITION) {
+        // If the new type is position, reset position integrator.
+        pbio_position_integrator_reset(&ctl->position_integrator, &ctl->settings, time_now);
+    } else {
+        // If the new type is timed, reset speed integrator.
+        pbio_speed_integrator_reset(&ctl->speed_integrator, &ctl->settings);
+    }
+
+    // Set the given type.
+    ctl->type = type;
 }
 
 /**
@@ -280,10 +344,6 @@ static pbio_error_t _pbio_control_start_position_control(pbio_control_t *ctl, ui
 
     pbio_error_t err;
 
-    // Set new maneuver action and stop type, and state
-    ctl->on_completion = on_completion;
-    ctl->on_target = false;
-
     // Common trajectory parameters for all cases covered here.
     pbio_trajectory_command_t command = {
         .position_end = *target,
@@ -300,7 +360,7 @@ static pbio_error_t _pbio_control_start_position_control(pbio_control_t *ctl, ui
         // If no control is ongoing, we just start from the measured state.
         command.time_start = time_now;
         command.position_start = state->position;
-        command.speed_start = state->speed_estimate;
+        command.speed_start = state->speed;
 
         // With the command fully populated, we can calculate the trajectory.
         err = pbio_trajectory_new_angle_command(&ctl->trajectory, &command);
@@ -349,22 +409,8 @@ static pbio_error_t _pbio_control_start_position_control(pbio_control_t *ctl, ui
         }
     }
 
-    // Reset PID control if needed
-    if (!pbio_control_type_is_position(ctl)) {
-        // Get (again) the reference at current time, so we get the correct
-        // value regardless of the command path followed above.
-        pbio_trajectory_reference_t ref_new;
-        pbio_trajectory_get_reference(&ctl->trajectory, time_now, &ref_new);
-
-        // New angle maneuver, so reset the rate integrator
-        pbio_position_integrator_reset(&ctl->position_integrator, &ctl->settings, ref_new.time);
-
-        // Reset load filter
-        ctl->load = 0;
-    }
-
-    // Set the new control state
-    ctl->type = PBIO_CONTROL_POSITION;
+    // Activate control type and reset integrators if needed.
+    pbio_control_set_control_type(ctl, time_now, PBIO_CONTROL_POSITION, on_completion);
 
     return PBIO_SUCCESS;
 }
@@ -433,7 +479,7 @@ pbio_error_t pbio_control_start_position_control_relative(pbio_control_t *ctl, u
         pbio_trajectory_get_endpoint(&ctl->trajectory, &prev_end);
         if (ctl->on_completion == PBIO_CONTROL_ON_COMPLETION_COAST_SMART &&
             pbio_angle_diff_is_small(&prev_end.position, &state->position) &&
-            pbio_math_abs(pbio_angle_diff_mdeg(&prev_end.position, &state->position)) < ctl->settings.position_tolerance * 2) {
+            pbio_int_math_abs(pbio_angle_diff_mdeg(&prev_end.position, &state->position)) < ctl->settings.position_tolerance * 2) {
             // We're close enough, so make the new target relative to the
             // endpoint of the last one.
             pbio_angle_sum(&prev_end.position, &increment, &target);
@@ -460,10 +506,6 @@ pbio_error_t pbio_control_start_position_control_relative(pbio_control_t *ctl, u
  */
 pbio_error_t pbio_control_start_position_control_hold(pbio_control_t *ctl, uint32_t time_now, int32_t position) {
 
-    // Set new maneuver action and stop type, and state
-    ctl->on_completion = PBIO_CONTROL_ON_COMPLETION_HOLD;
-    ctl->on_target = false;
-
     // Compute new maneuver based on user argument, starting from the initial state
     pbio_trajectory_command_t command = {
         .time_start = pbio_control_get_ref_time(ctl, time_now),
@@ -473,18 +515,11 @@ pbio_error_t pbio_control_start_position_control_hold(pbio_control_t *ctl, uint3
     pbio_control_settings_app_to_ctl_long(&ctl->settings, position, &command.position_start);
     pbio_control_settings_app_to_ctl_long(&ctl->settings, position, &command.position_end);
 
+    // Holding means staying at a constant trajectory.
     pbio_trajectory_make_constant(&ctl->trajectory, &command);
-    // If called for the first time, set state and reset PID
-    if (!pbio_control_type_is_position(ctl)) {
-        // Initialize or reset the PID control status for the given maneuver
-        pbio_position_integrator_reset(&ctl->position_integrator, &ctl->settings, time_now);
 
-        // Reset load filter
-        ctl->load = 0;
-    }
-
-    // This is an angular control maneuver
-    ctl->type = PBIO_CONTROL_POSITION;
+    // Activate control type and reset integrators if needed.
+    pbio_control_set_control_type(ctl, time_now, PBIO_CONTROL_POSITION, PBIO_CONTROL_ON_COMPLETION_HOLD);
 
     return PBIO_SUCCESS;
 }
@@ -509,14 +544,10 @@ pbio_error_t pbio_control_start_timed_control(pbio_control_t *ctl, uint32_t time
         on_completion = PBIO_CONTROL_ON_COMPLETION_COAST;
     }
 
-    // Set new maneuver action and stop type, and state
-    ctl->on_completion = on_completion;
-    ctl->on_target = false;
-
     // Common trajectory parameters for the cases covered here.
     pbio_trajectory_command_t command = {
         .time_start = time_now,
-        .duration = duration,
+        .duration = pbio_control_time_ms_to_ticks(duration),
         .speed_target = pbio_control_settings_app_to_ctl(&ctl->settings, speed),
         .speed_max = ctl->settings.speed_max,
         .acceleration = ctl->settings.acceleration,
@@ -529,7 +560,7 @@ pbio_error_t pbio_control_start_timed_control(pbio_control_t *ctl, uint32_t time
         // If no control is ongoing, we just start from the measured state.
         command.time_start = time_now;
         command.position_start = state->position;
-        command.speed_start = state->speed_estimate;
+        command.speed_start = state->speed;
 
         // With the command fully populated, we can calculate the trajectory.
         err = pbio_trajectory_new_time_command(&ctl->trajectory, &command);
@@ -582,17 +613,8 @@ pbio_error_t pbio_control_start_timed_control(pbio_control_t *ctl, uint32_t time
         }
     }
 
-    // Reset PD control if needed
-    if (!pbio_control_type_is_time(ctl)) {
-        // New maneuver, so reset the rate integrator
-        pbio_speed_integrator_reset(&ctl->speed_integrator, &ctl->settings);
-
-        // Set the new control state
-        ctl->type = PBIO_CONTROL_TIMED;
-
-        // Reset load filter
-        ctl->load = 0;
-    }
+    // Activate control type and reset integrators if needed.
+    pbio_control_set_control_type(ctl, time_now, PBIO_CONTROL_TIMED, on_completion);
 
     return PBIO_SUCCESS;
 }
@@ -680,17 +702,4 @@ bool pbio_control_is_stalled(pbio_control_t *ctl, uint32_t *stall_duration) {
  */
 bool pbio_control_is_done(pbio_control_t *ctl) {
     return ctl->type == PBIO_CONTROL_NONE || ctl->on_target;
-}
-
-/**
- * Gets the load experienced by the controller.
- *
- * It is determined as a slow moving average of the PID output, which is a
- * measure for how hard the controller must work to stay on target.
- *
- * @param [in]  ctl             The control instance.
- * @return                      The approximate load (control units).
- */
-int32_t pbio_control_get_load(pbio_control_t *ctl) {
-    return ctl->type == PBIO_CONTROL_NONE ? 0 : ctl->load;
 }

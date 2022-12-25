@@ -10,7 +10,7 @@
 #include <pbdrv/ioport.h>
 
 #include <pbio/angle.h>
-#include <pbio/math.h>
+#include <pbio/int_math.h>
 #include <pbio/observer.h>
 #include <pbio/parent.h>
 #include <pbio/servo.h>
@@ -102,19 +102,37 @@ static pbio_error_t pbio_servo_update(pbio_servo_t *srv) {
     int32_t voltage;
     pbio_dcmotor_get_state(srv->dcmotor, &applied_actuation, &voltage);
 
-    // Log servo state.
-    int32_t log_data[] = {
-        time_now,
-        pbio_control_settings_ctl_to_app_long(&srv->control.settings, &state.position),
-        0,
-        applied_actuation,
-        voltage,
-        pbio_control_settings_ctl_to_app_long(&srv->control.settings, &state.position_estimate),
-        pbio_control_settings_ctl_to_app(&srv->control.settings, state.speed_estimate),
-        feedback_torque,
-        feedforward_torque
-    };
-    pbio_logger_update(&srv->log, log_data);
+    // Optionally log servo state.
+    if (pbio_logger_is_active(&srv->log)) {
+
+        // Get stall state
+        bool stalled;
+        uint32_t stall_duration;
+        pbio_servo_is_stalled(srv, &stalled, &stall_duration);
+
+        int32_t log_data[] = {
+            // Column 0: Log time (added by logger).
+            // Column 1: Current time.
+            time_now,
+            // Column 2: Motor angle in degrees.
+            pbio_control_settings_ctl_to_app_long(&srv->control.settings, &state.position),
+            // Column 3: Motor speed in degrees/second.
+            pbio_control_settings_ctl_to_app(&srv->control.settings, state.speed),
+            // Column 4: Actuation type (LSB 0--1), stall state (LSB 2).
+            applied_actuation | (stalled << 2),
+            // Column 5: Actuation voltage.
+            voltage,
+            // Column 6: Estimated position in degrees.
+            pbio_control_settings_ctl_to_app_long(&srv->control.settings, &state.position_estimate),
+            // Column 7: Estimated speed in degrees/second.
+            pbio_control_settings_ctl_to_app(&srv->control.settings, state.speed_estimate),
+            // Column 8: Feedback torque (uNm).
+            feedback_torque,
+            // Column 9: Feedback torque (uNm).
+            feedforward_torque
+        };
+        pbio_logger_add_row(&srv->log, log_data);
+    }
 
     // Update the state observer
     pbio_observer_update(&srv->observer, time_now, &state.position, applied_actuation, voltage);
@@ -319,7 +337,7 @@ pbio_error_t pbio_servo_get_state_control(pbio_servo_t *srv, pbio_control_state_
     }
 
     // Get estimated state
-    pbio_observer_get_estimated_state(&srv->observer, &state->position_estimate, &state->speed_estimate);
+    pbio_observer_get_estimated_state(&srv->observer, &state->speed, &state->position_estimate, &state->speed_estimate);
 
     return PBIO_SUCCESS;
 }
@@ -348,7 +366,7 @@ pbio_error_t pbio_servo_get_state_user(pbio_servo_t *srv, int32_t *angle, int32_
 
     // Scale by gear ratio to whole degrees.
     *angle = pbio_control_settings_ctl_to_app_long(&srv->control.settings, &state.position);
-    *speed = pbio_control_settings_ctl_to_app(&srv->control.settings, state.speed_estimate);
+    *speed = pbio_control_settings_ctl_to_app(&srv->control.settings, state.speed);
     return PBIO_SUCCESS;
 }
 
@@ -412,15 +430,37 @@ pbio_error_t pbio_servo_stop(pbio_servo_t *srv, pbio_control_on_completion_t on_
             pbio_control_stop(&srv->control);
             return pbio_servo_actuate(srv, PBIO_DCMOTOR_ACTUATION_BRAKE, 0);
         case PBIO_CONTROL_ON_COMPLETION_HOLD: {
-            // To hold we can just run 0 degrees from here.
-            return pbio_servo_run_angle(srv, 0, 0, on_completion);
+            // To hold, we first have to figure out which angle to hold.
+            int32_t hold_target;
+            if (pbio_control_is_active(&srv->control)) {
+                // If control is active, hold at current target.
+                uint32_t time = pbio_control_get_ref_time(&srv->control, pbio_control_get_time_ticks());
+                pbio_trajectory_reference_t ref;
+                pbio_trajectory_get_reference(&srv->control.trajectory, time, &ref);
+                hold_target = pbio_control_settings_ctl_to_app_long(&srv->control.settings, &ref.position);
+            } else {
+                // If no control is ongoing, just hold measured state.
+                int32_t speed;
+                pbio_servo_get_state_user(srv, &hold_target, &speed);
+            }
+            // Track the hold angle.
+            return pbio_servo_track_target(srv, hold_target);
         }
         default:
             return PBIO_ERROR_INVALID_ARG;
     }
 }
 
-static pbio_error_t pbio_servo_run_timed(pbio_servo_t *srv, int32_t speed, uint32_t duration, pbio_control_on_completion_t on_completion) {
+/**
+ * Runs the servo at a given speed and stops after a given duration or runs forever.
+ *
+ * @param [in]  srv            The servo instance.
+ * @param [in]  speed          Angular velocity in degrees per second.
+ * @param [in]  duration       Duration (ms) from start to becoming stationary again.
+ * @param [in]  on_completion  What to do when the duration completes.
+ * @return                     Error code.
+ */
+static pbio_error_t pbio_servo_run_time_common(pbio_servo_t *srv, int32_t speed, uint32_t duration, pbio_control_on_completion_t on_completion) {
 
     // Don't allow new user command if update loop not registered.
     if (!pbio_servo_update_loop_is_running(srv)) {
@@ -443,7 +483,7 @@ static pbio_error_t pbio_servo_run_timed(pbio_servo_t *srv, int32_t speed, uint3
         return err;
     }
 
-    // Start a timed maneuver with duration converted to microseconds.
+    // Start a timed maneuver.
     return pbio_control_start_timed_control(&srv->control, time_now, &state, duration, speed, on_completion);
 }
 
@@ -456,13 +496,13 @@ static pbio_error_t pbio_servo_run_timed(pbio_servo_t *srv, int32_t speed, uint3
  */
 pbio_error_t pbio_servo_run_forever(pbio_servo_t *srv, int32_t speed) {
     // Start a timed maneuver and restart it when it is done, thus running forever.
-    return pbio_servo_run_timed(srv, speed, DURATION_FOREVER_TICKS, PBIO_CONTROL_ON_COMPLETION_CONTINUE);
+    return pbio_servo_run_time_common(srv, speed, PBIO_TRAJECTORY_DURATION_FOREVER_MS, PBIO_CONTROL_ON_COMPLETION_CONTINUE);
 }
 
 /**
  * Runs the servo at a given speed and stops after a given duration.
  *
- * @param [in]  srv            The control instance.
+ * @param [in]  srv            The servo instance.
  * @param [in]  speed          Angular velocity in degrees per second.
  * @param [in]  duration       Duration (ms) from start to becoming stationary again.
  * @param [in]  on_completion  What to do when the duration completes.
@@ -470,7 +510,7 @@ pbio_error_t pbio_servo_run_forever(pbio_servo_t *srv, int32_t speed) {
  */
 pbio_error_t pbio_servo_run_time(pbio_servo_t *srv, int32_t speed, uint32_t duration, pbio_control_on_completion_t on_completion) {
     // Start a timed maneuver, duration specified by user.
-    return pbio_servo_run_timed(srv, speed, pbio_control_time_ms_to_ticks(duration), on_completion);
+    return pbio_servo_run_time_common(srv, speed, duration, on_completion);
 }
 
 /**
@@ -612,6 +652,8 @@ pbio_error_t pbio_servo_is_stalled(pbio_servo_t *srv, bool *stalled, uint32_t *s
 
     // Don't allow access if update loop not registered.
     if (!pbio_servo_update_loop_is_running(srv)) {
+        *stalled = false;
+        *stall_duration = 0;
         return PBIO_ERROR_INVALID_OP;
     }
 
@@ -636,6 +678,51 @@ pbio_error_t pbio_servo_is_stalled(pbio_servo_t *srv, bool *stalled, uint32_t *s
     // In this case, the best we can do is ask the observer if we're stuck.
     *stalled = pbio_observer_is_stalled(&srv->observer, pbio_control_get_time_ticks(), stall_duration);
     *stall_duration = pbio_control_time_ticks_to_ms(*stall_duration);
+
+    return PBIO_SUCCESS;
+}
+
+/**
+ * Gets estimated external load experienced by the servo.
+ *
+ * @param [in]  srv     The servo instance.
+ * @param [out] load    Estimated load (mNm).
+ * @return              Error code.
+ */
+pbio_error_t pbio_servo_get_load(pbio_servo_t *srv, int32_t *load) {
+
+    // Don't allow access if update loop not registered.
+    if (!pbio_servo_update_loop_is_running(srv)) {
+        *load = 0;
+        return PBIO_ERROR_INVALID_OP;
+    }
+
+    // Get passive actuation type.
+    pbio_dcmotor_actuation_t applied_actuation;
+    int32_t voltage;
+    pbio_dcmotor_get_state(srv->dcmotor, &applied_actuation, &voltage);
+
+    // Get best estimate based on control and physyical state.
+    if (applied_actuation == PBIO_DCMOTOR_ACTUATION_COAST) {
+        // Can't estimate load on coast.
+        *load = 0;
+    } else if (pbio_control_is_active(&srv->control)) {
+        // The experienced load is the opposite sign of what the PID is
+        // trying to overcome.
+        *load = -srv->control.pid_average;
+    } else {
+        // Read the angle.
+        pbio_angle_t angle;
+        pbio_error_t err = pbio_tacho_get_angle(srv->tacho, &angle);
+        if (err != PBIO_SUCCESS) {
+            return err;
+        }
+        // Use observer error as a measure of torque.
+        *load = pbio_observer_get_feedback_torque(&srv->observer, &angle);
+    }
+
+    // Convert to user torque units (mNm).
+    *load = pbio_control_settings_actuation_ctl_to_app(*load);
 
     return PBIO_SUCCESS;
 }

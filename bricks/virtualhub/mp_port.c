@@ -14,7 +14,10 @@
 #include <Python.h>
 
 #include <pbio/main.h>
-#include <pbsys/user_program.h>
+#include <pbsys/core.h>
+#include <pbsys/program_stop.h>
+#include <pbsys/status.h>
+
 #include "../../lib/pbio/drv/virtual.h"
 
 #include "py/mpconfig.h"
@@ -25,12 +28,13 @@
 #include "py/runtime.h"
 
 #include "pybricks/util_pb/pb_error.h"
+#include <pybricks/common.h>
 
 // from micropython/ports/unix/main.c
 #define FORCED_EXIT (0x100)
 
 // callback for when stop button is pressed in IDE or on hub
-static void user_program_stop_func(void) {
+void pbsys_main_stop_program(bool force_stop) {
     static const mp_rom_obj_tuple_t args = {
         .base = { .type = &mp_type_tuple },
         .len = 2,
@@ -55,10 +59,9 @@ static void user_program_stop_func(void) {
     mp_sched_exception(MP_OBJ_FROM_PTR(&system_exit));
 }
 
-static const pbsys_user_program_callbacks_t user_program_callbacks = {
-    .stop = user_program_stop_func,
-    .stdin_event = NULL,
-};
+bool pbsys_main_stdin_event(uint8_t c) {
+    return false;
+}
 
 static MP_DEFINE_EXCEPTION(CPythonException, Exception)
 
@@ -115,13 +118,17 @@ void pb_virtualhub_port_init(void) {
 
     pbio_init();
 
-    pbsys_user_program_prepare(&user_program_callbacks);
+    pbsys_init();
+
+    pbsys_status_set(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING);
+    while (pbio_do_one_event()) {
+    }
+
+    pb_package_pybricks_init(false);
 }
 
 // MICROPY_PORT_DEINIT_FUNC
 void pb_virtualhub_port_deinit(void) {
-    pbsys_user_program_unprepare();
-
     pbio_error_t err = pbdrv_virtual_platform_stop();
 
     if (err != PBIO_SUCCESS) {
@@ -167,7 +174,7 @@ start:
     pthread_sigmask(SIG_SETMASK, &sigmask, &origmask);
 
     if (process_nevents()) {
-        // somthing was scheduled since the event loop above
+        // something was scheduled since the event loop above
         pthread_sigmask(SIG_SETMASK, &origmask, NULL);
         goto start;
     }
@@ -178,7 +185,9 @@ start:
     };
 
     // "sleep" with "interrupts" enabled
+    MP_THREAD_GIL_EXIT();
     pselect(0, NULL, NULL, NULL, &timeout, &origmask);
+    MP_THREAD_GIL_ENTER();
 
     // restore "interrupts"
     pthread_sigmask(SIG_SETMASK, &origmask, NULL);

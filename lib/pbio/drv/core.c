@@ -5,10 +5,12 @@
 
 #include "core.h"
 #include "battery/battery.h"
+#include "block_device/block_device.h"
 #include "bluetooth/bluetooth.h"
 #include "charger/charger.h"
 #include "clock/clock.h"
 #include "counter/counter.h"
+#include "imu/imu.h"
 #include "ioport/ioport.h"
 #include "led/led_array.h"
 #include "led/led.h"
@@ -30,9 +32,11 @@ void pbdrv_init(void) {
 
     // the rest of the drivers should be implemented so that init order doesn't matter
     pbdrv_battery_init();
+    pbdrv_block_device_init();
     pbdrv_bluetooth_init();
     pbdrv_charger_init();
     pbdrv_counter_init();
+    pbdrv_imu_init();
     pbdrv_ioport_init();
     pbdrv_led_array_init();
     pbdrv_led_init();

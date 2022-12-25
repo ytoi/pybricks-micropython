@@ -4,6 +4,144 @@
 
 ## [Unreleased]
 
+## [3.2.0c1] - 2022-12-09
+
+### Fixed
+- Fixed `motor.control.limits()` not working if acceleration was `None`.
+- Fixed crash on calling methods on uninitialized objects ([support#805]).
+- Fixed crash on calling methods in `__init__(self, ...)` before
+  calling `super().__init(...)` on uninitialized objects ([support#777]).
+- Reverted Pybricks Code stop button raises `SystemAbort` instead of
+  `SystemExit` ([support#834]).
+- Improved stop message raised on `SystemExit` and `SystemAbort` ([support#836]).
+- Fixed Technic Hub and City Hub sometimes not shutting down when a Bluetooth
+  operation is busy ([support#814]).
+- Fixed `hub.system` methods not working ([support#837]).
+
+### Changed
+- Changed default XYZ orientation of the Technic Hub and the Essential Hub to
+  match the SPIKE Prime Hub and Move Hub ([support#848]).
+
+[support#777]: https://github.com/pybricks/support/issues/777
+[support#805]: https://github.com/pybricks/support/issues/805
+[support#814]: https://github.com/pybricks/support/issues/814
+[support#826]: https://github.com/pybricks/support/issues/826
+[support#834]: https://github.com/pybricks/support/issues/834
+[support#836]: https://github.com/pybricks/support/issues/836
+[support#837]: https://github.com/pybricks/support/issues/837
+[support#848]: https://github.com/pybricks/support/issues/848
+
+
+## [3.2.0b6] - 2022-12-02
+
+### Added
+- Added support for `PBIO_PYBRICKS_COMMAND_REBOOT_TO_UPDATE_MODE` Pybricks
+  Profile BLE command.
+- Implemented `Motor.load()` which now measures load both during active
+  conditions (`run`) and passive conditions (`dc`).
+
+### Changed
+- The Pybricks Code stop button will force the program to exit even if the user
+  catches the `SystemExit` exception ([pybricks-micropython#117]).
+- Changed `PrimeHub.display.image()` to `PrimeHub.display.icon()` and renamed
+  its kwarg from `image` to `icon` ([support#409]).
+- Deprecated `Control.load()`, `Control.stalled()`, and `Control.done()`
+  methods, but they will continue to exist in the firmware until further
+  notice ([support#822]). New scripts are encouraged to use the (improved)
+  variants available directly on `Motor` objects.
+
+### Fixed
+- Fixed connecting `Remote` on BOOST move hub ([support#793]).
+
+### Removed
+- Removed `hub.system.reset()` method.
+- Disabled `micropython` module on Move Hub.
+
+[pybricks-micropython#117]: https://github.com/pybricks/pybricks-micropython/pull/117
+[support#409]: https://github.com/pybricks/support/issues/409
+[support#793]: https://github.com/pybricks/support/issues/793
+[support#822]: https://github.com/pybricks/support/issues/822
+
+## [3.2.0b5] - 2022-11-11
+
+### Added
+- Added `DriveBase.stalled()` for convenient stall detection.
+- Added `DriveBase.done()` for convenient completion detection, which is
+  practical when combined with `wait=False`.
+- Added `Motor.done()` for convenient completion detection, which is
+  practical when combined with `wait=False`. Especially on Move Hub, which
+  does not have the control attribute enabled.
+
+### Fixed
+- Fixed brief hub freeze on `pybricks.common.Logger.save()` when not connected
+  to the computer ([support#738]).
+- Fixed drive base stall flags being set while not stalled ([support#767]).
+- Fixed `Motor.run_target` raising exception for short moves ([support#786]).
+
+[support#738]: https://github.com/pybricks/support/issues/738
+[support#767]: https://github.com/pybricks/support/issues/767
+[support#786]: https://github.com/pybricks/support/issues/786
+
+## [3.2.0b4] - 2022-10-21
+
+### Added
+- Indicate that the hub is shutting down by quickly flashing the hub light for
+  half a second. This makes it easier to see when you can stop pressing the
+  button.
+- Indicate that the SPIKE Prime hub is booting and shutting down by fading
+  the stop sign in and out.
+- Implemented iterator protocol on `geometry.Matrix` class.
+- Added support for multi-file projects ([pybricks-micropython#115]).
+- Added new `System.storage()` API ([support#85]).
+
+### Changed
+- Battery full indication (green light) comes on earlier ([support#647]).
+- New indication for over-charging battery (blinking green light).
+- On Move Hub, City Hub, and Technic Hub, programs can now be restarted with
+  the button after downloading them. They are saved on shutdown.
+- Improved program download process. Reduces the likelihood of getting errors
+  about incompatible .mpy files when accidentally entering characters in the
+  terminal window when no program is active.
+- On Prime Hub and Essential Hub, there is no longer a wait time after boot
+  before you can start programs.
+- On Prime Hub and Essential Hub, the user program is now stored in a section
+  of the external flash that is not used by any file system of other known
+  firmwares, in order to avoid compatibility issues when changing firmware.
+- Restored the `Motor.speed()` method and `DriveBase` equivalent to provide
+  speed as a numerical derivative of the motor position, instead of a
+  model-based estimate. For most use cases, this is a more intuitive result
+  because this speed value is not affected by mechanical load.
+- When using the REPL, everything from all Pybricks modules was automatically
+  imported for convenience. Now, MicroPython modules are also automatically
+  imported ([support#741]).
+- Updated Bluetooth to [Pybricks Profile v1.2.0][pp1.2.0].
+- Bluetooth now uses random private address instead of static public address
+  ([support#600]).
+
+### Fixed
+- Fixed motors going out of sync when starting program ([support#679]).
+- Fixed motor torque signal overflowing under load ([support#729]).
+- Fixed city hub turning back on after shutdown ([support#692]).
+- Fixed IMU I2C bus lockup on SPIKE hubs ([support#232]).
+- Fixed REPL history corrupt after soft reset ([support#699]).
+- Fixed "ValueError: incompatible .mpy file" when pressing the button when
+  there is no program yet ([support#599]).
+
+[pp1.2.0]: https://github.com/pybricks/technical-info/blob/master/pybricks-ble-profile.md#profile-v120
+[pybricks-micropython#115]: https://github.com/pybricks/pybricks-micropython/pull/115
+[support#85]: https://github.com/pybricks/support/issues/85
+[support#232]: https://github.com/pybricks/support/issues/232
+[support#599]: https://github.com/pybricks/support/issues/599
+[support#600]: https://github.com/pybricks/support/issues/600
+[support#647]: https://github.com/pybricks/support/issues/647
+[support#679]: https://github.com/pybricks/support/issues/679
+[support#692]: https://github.com/pybricks/support/issues/692
+[support#699]: https://github.com/pybricks/support/issues/699
+[support#729]: https://github.com/pybricks/support/issues/729
+[support#741]: https://github.com/pybricks/support/issues/741
+
+## [3.2.0b3] - 2022-07-20
+
 ### Fixed
 - Fix integral control not working properly due to mistakes introduced while
   converting the controllers to use millidegrees.
@@ -282,7 +420,12 @@ Prerelease changes are documented at [support#48].
 
 
 <!-- diff links for headers -->
-[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b2...HEAD
+[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0c1...HEAD
+[3.2.0c1]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b6...v3.2.0c1
+[3.2.0b6]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b5...v3.2.0b6
+[3.2.0b5]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b4...v3.2.0b5
+[3.2.0b4]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b3...v3.2.0b4
+[3.2.0b3]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b2...v3.2.0b3
 [3.2.0b2]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b1...v3.2.0b2
 [3.2.0b1]: https://github.com/pybricks/pybricks-micropython/compare/v3.1.0...v3.2.0b1
 [3.1.0]: https://github.com/pybricks/pybricks-micropython/compare/v3.0.0c1...v3.1.0

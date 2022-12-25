@@ -1,6 +1,41 @@
+## 6.3.0 - 2022-12-02
+
+### Changed
+- Updated firmware to v3.2.0b6.
+
+## 6.2.0 - 2022-11-11
+
+### Changed
+- Updated firmware to v3.2.0b5.
+
+## 6.0.1 - 2022-09-14
+### Removed
+- Removed invalid property on `FirmwareMetadataV110` type.
+
+## 6.0.0 - 2022-09-14
+### Added
+- Added support for firmware.metadata.json v2.0.0.
+- Added metadata version type discrimination functions.
+### Changed
+- Changed definition of `FirmwareMetadata` type (potentially breaking).
+
+## 5.0.0 - 2022-07-20
+### Changed
+- Made `main.py` optional.
+
+## 4.17.0 - 2022-07-20
+### Added
+- Added SPIKE Prime and Essential hubs.
+### Changed
+- Updated firmware to v3.2.0b3.
+
 ## 4.16.1 - 2022-07-03
 ### Changed
 - Rebuild with correct firmware.
+
+## 4.16.0 - 2022-07-03
+### Changed
+- Updated firmware to v3.2.0b2.
 
 ## 4.15.0 - 2022-06-03
 ### Changed

@@ -24,7 +24,8 @@
 
 #include <pbio/iodev.h>
 
-#define PBIO_CONTROL_LOG_COLS (13)
+// Number of values per row when control data logger is active.
+#define PBIO_CONTROL_LOGGER_NUM_COLS (12)
 
 /**
  * Actions to be taken when a control command completes.
@@ -55,6 +56,10 @@ typedef struct _pbio_control_state_t {
      * "distance" driven.
      */
     pbio_angle_t position;
+    /**
+     * Speed determined as numerical derivative of position.
+     */
+    int32_t speed;
     /**
      * Estimated position from application-specific state observer.
      */
@@ -125,7 +130,7 @@ typedef struct _pbio_control_t {
     /**
      * Slow moving average of the PID output, which is a measure for load.
      */
-    int32_t load;
+    int32_t pid_average;
     /**
      * Flag that says whether the controller is currently stalled.
      */
@@ -156,7 +161,6 @@ bool pbio_control_type_is_position(pbio_control_t *ctl);
 bool pbio_control_type_is_time(pbio_control_t *ctl);
 bool pbio_control_is_stalled(pbio_control_t *ctl, uint32_t *stall_duration);
 bool pbio_control_is_done(pbio_control_t *ctl);
-int32_t pbio_control_get_load(pbio_control_t *ctl);
 
 // Start new control command:
 

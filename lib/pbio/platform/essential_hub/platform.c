@@ -7,17 +7,20 @@
 #undef UNUSED
 #include <stm32f4xx_hal.h>
 
+#include <pbdrv/clock.h>
 #include "pbio/uartdev.h"
 #include "pbio/light_matrix.h"
 #include "pbio/version.h"
 
 #include "../../drv/adc/adc_stm32_hal.h"
+#include "../../drv/block_device/block_device_w25qxx_stm32.h"
 #include "../../drv/bluetooth/bluetooth_btstack_control_gpio.h"
 #include "../../drv/bluetooth/bluetooth_btstack_uart_block_stm32_hal.h"
 #include "../../drv/bluetooth/bluetooth_btstack.h"
 #include "../../drv/button/button_gpio.h"
 #include "../../drv/charger/charger_mp2639a.h"
 #include "../../drv/counter/counter_lpf2.h"
+#include "../../drv/imu/imu_lsm6ds3tr_c_stm32.h"
 #include "../../drv/ioport/ioport_lpf2.h"
 #include "../../drv/led/led_pwm.h"
 #include "../../drv/motor_driver/motor_driver_hbridge_pwm.h"
@@ -163,6 +166,60 @@ const pbdrv_counter_lpf2_platform_data_t pbdrv_counter_lpf2_platform_data[PBDRV_
         .port_id = PBIO_PORT_ID_B,
     },
 };
+
+// IMU
+
+const pbdrv_imu_lsm6s3tr_c_stm32_platform_data_t pbdrv_imu_lsm6s3tr_c_stm32_platform_data = {
+    .i2c = I2C3,
+};
+
+void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
+    GPIO_InitTypeDef gpio_init;
+
+    if (hi2c->Instance == I2C3) {
+        gpio_init.Pull = GPIO_NOPULL;
+        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+
+        // SCL
+        gpio_init.Pin = GPIO_PIN_8;
+
+        // do a quick bus reset in case IMU chip is in bad state
+        gpio_init.Mode = GPIO_MODE_OUTPUT_OD;
+        HAL_GPIO_Init(GPIOA, &gpio_init);
+
+        for (int i = 0; i < 10; i++) {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
+            pbdrv_clock_delay_us(1);
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+            pbdrv_clock_delay_us(1);
+        }
+
+        // then configure for normal use
+        gpio_init.Mode = GPIO_MODE_AF_OD;
+        gpio_init.Alternate = GPIO_AF4_I2C3;
+        HAL_GPIO_Init(GPIOA, &gpio_init);
+
+        // SDA
+        gpio_init.Pin = GPIO_PIN_9;
+        HAL_GPIO_Init(GPIOC, &gpio_init);
+
+        // REVISIT: PC13 is also used in the official LEGO firmware - probably
+        // an interrupt back from the IMU chip
+
+        HAL_NVIC_SetPriority(I2C3_ER_IRQn, 3, 1);
+        HAL_NVIC_EnableIRQ(I2C3_ER_IRQn);
+        HAL_NVIC_SetPriority(I2C3_EV_IRQn, 3, 2);
+        HAL_NVIC_EnableIRQ(I2C3_EV_IRQn);
+    }
+}
+
+void I2C3_ER_IRQHandler(void) {
+    pbdrv_imu_lsm6ds3tr_c_stm32_handle_i2c_er_irq();
+}
+
+void I2C3_EV_IRQHandler(void) {
+    pbdrv_imu_lsm6ds3tr_c_stm32_handle_i2c_ev_irq();
+}
 
 // I/O ports
 
@@ -354,10 +411,24 @@ void FMPI2C1_ER_IRQHandler(void) {
 void HAL_FMPI2C_MspInit(FMPI2C_HandleTypeDef *hfmpi2c) {
     GPIO_InitTypeDef gpio_init;
 
-    gpio_init.Pin = GPIO_PIN_14 | GPIO_PIN_15;
-    gpio_init.Mode = GPIO_MODE_AF_OD;
     gpio_init.Pull = GPIO_NOPULL;
     gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+
+    // do a quick bus reset in case IMU chip is in bad state
+    gpio_init.Pin = GPIO_PIN_15; // SCL
+    gpio_init.Mode = GPIO_MODE_OUTPUT_OD;
+    HAL_GPIO_Init(GPIOB, &gpio_init);
+
+    for (int i = 0; i < 10; i++) {
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET);
+        pbdrv_clock_delay_us(1);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET);
+        pbdrv_clock_delay_us(1);
+    }
+
+    // then configure for normal use
+    gpio_init.Pin = GPIO_PIN_14 | GPIO_PIN_15; // SDA | SCL
+    gpio_init.Mode = GPIO_MODE_AF_OD;
     gpio_init.Alternate = GPIO_AF4_FMPI2C1;
     HAL_GPIO_Init(GPIOB, &gpio_init);
 }
@@ -516,6 +587,51 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
     }
 }
 
+void SPI2_IRQHandler(void) {
+    pbdrv_block_device_w25qxx_stm32_spi_irq();
+}
+
+void DMA1_Stream4_IRQHandler(void) {
+    pbdrv_block_device_w25qxx_stm32_spi_handle_tx_dma_irq();
+}
+
+void DMA1_Stream3_IRQHandler(void) {
+    pbdrv_block_device_w25qxx_stm32_spi_handle_rx_dma_irq();
+}
+
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI2) {
+        pbdrv_block_device_w25qxx_stm32_spi_rx_complete();
+    }
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI2) {
+        pbdrv_block_device_w25qxx_stm32_spi_tx_complete();
+    }
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI2) {
+        pbdrv_block_device_w25qxx_stm32_spi_error();
+    }
+}
+
+const pbdrv_block_device_w25qxx_stm32_platform_data_t pbdrv_block_device_w25qxx_stm32_platform_data = {
+    .tx_dma = DMA1_Stream4,
+    .tx_dma_ch = DMA_CHANNEL_0,
+    .tx_dma_irq = DMA1_Stream4_IRQn,
+    .rx_dma = DMA1_Stream3,
+    .rx_dma_ch = DMA_CHANNEL_0,
+    .rx_dma_irq = DMA1_Stream3_IRQn,
+    .spi = SPI2,
+    .irq = SPI2_IRQn,
+    .pin_ncs = {
+        .bank = GPIOB,
+        .pin = 12,
+    },
+};
+
 // USB
 
 void HAL_PCD_MspInit(PCD_HandleTypeDef *hpcd) {
@@ -561,45 +677,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t pin) {
     if (pin == GPIO_PIN_9) {
         pbdrv_usb_stm32_handle_vbus_irq(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9));
     }
-}
-
-// IMU
-
-void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
-    GPIO_InitTypeDef gpio_init;
-
-    if (hi2c->Instance == I2C3) {
-        gpio_init.Mode = GPIO_MODE_AF_OD;
-        gpio_init.Pull = GPIO_NOPULL;
-        gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-        gpio_init.Alternate = GPIO_AF4_I2C3;
-
-        // SCL
-        gpio_init.Pin = GPIO_PIN_8;
-        HAL_GPIO_Init(GPIOA, &gpio_init);
-
-        // SDA
-        gpio_init.Pin = GPIO_PIN_9;
-        HAL_GPIO_Init(GPIOC, &gpio_init);
-
-        // REVISIT: PC13 is also used in the official LEGO firmware - probably
-        // an interrupt back from the IMU chip
-
-        HAL_NVIC_SetPriority(I2C3_ER_IRQn, 3, 1);
-        HAL_NVIC_EnableIRQ(I2C3_ER_IRQn);
-        HAL_NVIC_SetPriority(I2C3_EV_IRQn, 3, 2);
-        HAL_NVIC_EnableIRQ(I2C3_EV_IRQn);
-    }
-}
-
-void I2C3_ER_IRQHandler(void) {
-    extern void mod_experimental_IMU_handle_i2c_er_irq(void);
-    mod_experimental_IMU_handle_i2c_er_irq();
-}
-
-void I2C3_EV_IRQHandler(void) {
-    extern void mod_experimental_IMU_handle_i2c_ev_irq(void);
-    mod_experimental_IMU_handle_i2c_ev_irq();
 }
 
 // Early initialization

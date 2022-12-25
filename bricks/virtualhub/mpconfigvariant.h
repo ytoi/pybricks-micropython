@@ -3,19 +3,21 @@
 
 #define PYBRICKS_HUB_CLASS_NAME         (MP_QSTR_VirtualHub)
 
+#define PYBRICKS_HUB_NAME               "virtualhub"
 #define PYBRICKS_HUB_VIRTUALHUB         (1)
 
 // Pybricks modules
 #define PYBRICKS_PY_COMMON              (1)
 #define PYBRICKS_PY_COMMON_CHARGER      (1)
 #define PYBRICKS_PY_COMMON_CONTROL      (1)
-#define PYBRICKS_PY_COMMON_IMU          (1)
+#define PYBRICKS_PY_COMMON_IMU          (0)
 #define PYBRICKS_PY_COMMON_KEYPAD       (1)
-#define PYBRICKS_PY_COMMON_LIGHT_MATRIX (1)
+#define PYBRICKS_PY_COMMON_LIGHT_ARRAY  (1)
+#define PYBRICKS_PY_COMMON_LIGHT_MATRIX (0)
 #define PYBRICKS_PY_COMMON_LOGGER       (1)
 #define PYBRICKS_PY_COMMON_LOGGER_REAL_FILE (1)
 #define PYBRICKS_PY_COMMON_MOTORS       (1)
-#define PYBRICKS_PY_COMMON_SPEAKER      (1)
+#define PYBRICKS_PY_COMMON_SPEAKER      (0)
 #define PYBRICKS_PY_COMMON_SYSTEM       (1)
 #define PYBRICKS_PY_EV3DEVICES          (0)
 #define PYBRICKS_PY_EXPERIMENTAL        (1)
@@ -33,9 +35,8 @@
 #define PYBRICKS_PY_ROBOTICS_DRIVEBASE_SPIKE (0)
 #define PYBRICKS_PY_TOOLS               (1)
 
-#include "../pybricks_config.h"
-
 // Upstream MicroPython options
+#define MICROPY_MODULE_ATTR_DELEGATION          (1)
 #define MICROPY_MODULE_BUILTIN_INIT             (1)
 #define MICROPY_PY_BUILTINS_HELP                (1)
 #define MICROPY_PY_BUILTINS_HELP_MODULES        (1)
@@ -58,7 +59,7 @@
     X(ECANCELED) \
 
 #define MICROPY_MPHALPORT_H "mpvarianthal.h"
-#define MICROPY_VARIANT_QSTR_DEFS_H "../pybricks_qstrdefs.h"
+#define MICROPY_VARIANT_QSTR_DEFS_H "../_common/qstrdefs.h"
 
 #define MICROPY_PORT_INIT_FUNC do { \
         extern void pb_virtualhub_port_init(void); \

@@ -5,21 +5,6 @@ license text and additional information can be found in the specified
 subdirectories.
 
 
-### LeJOS
-
-**path**: `bricks/nxt/nxt-firmware-drivers`
-
-**origin**: Git commit 079530f422098faeb89fee4cb52065ea66d2a836
-
-**url**: https://github.com/cmorty/lejos
-
-**terms**:
-- License: MPL-1.0
-- Permissions: Commercial use, distribution, modification, private use
-- Conditions: Disclose source, license/copyright notice and state changes
-- Restrictions: Liability, patent use, trademark use, warranty
-
-
 ### Texas Instruments BLE5-Stack
 
 **path**: `lib/ble5stack/`
@@ -49,6 +34,20 @@ subdirectories.
 - Conditions: Compiled code can only be executed on STM32 products
 - Restrictions: Liability, trademark use, warranty
 
+### nxos
+
+**path**: `lib/nxos`
+
+**origin**: Git commit bbed11a3740c576e95a8c6fe1dabb02c6cc9110c
+
+**url**: https://github.com/danderson/nxos
+
+**terms**:
+- License: GPL-2.0
+- Permissions: Commercial use, distribution, modification, private use
+- Conditions: Disclose source, license/copyright notice and state changes, same license
+- Restrictions: Liability, warranty
+
 
 ### STM32 USB Device Library
 
@@ -75,21 +74,6 @@ subdirectories.
 
 **terms**:
 - License: BSD-3-Clause
-- Permissions: Commercial use, distribution, modification, private use
-- Conditions: License and copyright notice
-- Restrictions: Liability, warranty
-
-
-### libfixmath
-
-**path**: `lib/libfixmath/`
-
-**origin**: Git commit 47a5aa74ff33b224b3f9150b0fff8b4a01d177fc
-
-**url**: https://github.com/PetteriAimonen/libfixmath
-
-**terms**:
-- License: MIT
 - Permissions: Commercial use, distribution, modification, private use
 - Conditions: License and copyright notice
 - Restrictions: Liability, warranty

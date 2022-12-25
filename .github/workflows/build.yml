@@ -14,17 +14,17 @@ env:
 jobs:
   mpy_cross:
     name: mpy-cross
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
     - name: Build mpy-cross
       run: make $MAKEOPTS -C micropython/mpy-cross
     - name: Upload mpy-cross
       if: ${{ success() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: mpy-cross
         path: micropython/mpy-cross/mpy-cross
@@ -32,16 +32,16 @@ jobs:
   unix_coverage:
     name: unix coverage
     needs: mpy_cross
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       PYBRICKS_NO_REDIRECT_STDOUT: 1
     steps:
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
     - name: Download mpy-cross
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v3
       with:
         name: mpy-cross
         path: micropython/mpy-cross
@@ -65,7 +65,7 @@ jobs:
 
   ev3dev_stretch:
     name: ev3dev-stretch
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Docker login
       uses: azure/docker-login@v1
@@ -78,7 +78,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install qemu-user-static
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 0
@@ -91,22 +91,21 @@ jobs:
     - name: Test
       if: ${{ success() }}
       run: |
-        docker exec --tty pybricks-ev3dev_armel make test
         docker exec --tty pybricks-ev3dev_armel make test-ev3dev
     - name: List failed tests
       if: failure()
       run: micropython/tests/run-tests.py --print-failures
     - name: Upload pybricks-micropython
       if: ${{ success() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
-        name: pybricks-micropython
+        name: pybricks-micropython-build-${{ github.run_number }}
         path: bricks/ev3dev/pybricks-micropython
 
   ev3dev_ubuntu_lts:
     name: ev3dev-ubuntu-lts
     needs: mpy_cross
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CROSS_COMPILE: ""
     steps:
@@ -128,11 +127,11 @@ jobs:
         uthash-dev \
         xfonts-100dpi
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
     - name: Download mpy-cross
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v3
       with:
         name: mpy-cross
         path: micropython/mpy-cross
@@ -149,53 +148,31 @@ jobs:
       if: failure()
       run: micropython/tests/run-tests.py --print-failures
 
-  cross_compiler:
-    name: download cross-compiler
-    runs-on: ubuntu-20.04
-    steps:
-    - name: Check cache
-      id: check-cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ runner.tool_cache }}/gcc-arm-10-2020-q4
-        key: gcc-arm-10-2020-q4
-    - name: Download
-      if: steps.check-cache.outputs.cache-hit != 'true'
-      uses: dlech/arm-none-eabi-gcc@master
-      with:
-        release: '10-2020-q4'
-        directory: ${{ runner.tool_cache }}/gcc-arm-10-2020-q4
-
   firmware:
     name: firmware
     strategy:
       fail-fast: false
       matrix:
         hub: [cityhub, essentialhub, movehub, nxt, primehub, technichub]
-    needs: [cross_compiler, mpy_cross]
-    runs-on: ubuntu-20.04
+    needs: [mpy_cross]
+    runs-on: ubuntu-22.04
     steps:
     - name: Install cross-compiler
-      uses: actions/cache@v2
-      with:
-        path: ${{ runner.tool_cache }}/gcc-arm-10-2020-q4
-        key: gcc-arm-10-2020-q4
-    - name: Add cross-compiler to path
-      run: echo ${{ runner.tool_cache }}/gcc-arm-10-2020-q4/bin >> $GITHUB_PATH
+      run: sudo apt-get update && sudo apt-get install --yes gcc-arm-none-eabi
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 0
     - name: Download mpy-cross
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v3
       with:
         name: mpy-cross
         path: micropython/mpy-cross
     - name: Fix file permission
       run: chmod +x micropython/mpy-cross/mpy-cross
     - name: Install python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.10'
     - name: Install Python packages
@@ -214,14 +191,14 @@ jobs:
       if: ${{ github.base_ref == null && github.ref == 'refs/heads/master' }}
       run: make -C bricks/${{ matrix.hub }}
     - name: Extract firmware.zip for upload
-      if: ${{ success() && matrix.hub != 'nxt' }}
+      if: ${{ success()}}
       working-directory: bricks/${{ matrix.hub }}/build
       run: unzip firmware.zip -d upload
     - name: Upload firmware
-      if: ${{ success() && matrix.hub != 'nxt' }}
-      uses: actions/upload-artifact@v2
+      if: ${{ success()}}
+      uses: actions/upload-artifact@v3
       with:
-        name: ${{ matrix.hub }}-firmware
+        name: ${{ matrix.hub }}-firmware-build-${{ github.run_number }}
         path: bricks/${{ matrix.hub }}/build/upload/*
 
   virtualhub:
@@ -230,12 +207,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 0
     - name: Download mpy-cross
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v3
       with:
         name: mpy-cross
         path: micropython/mpy-cross
@@ -246,25 +223,42 @@ jobs:
         make $MAKEOPTS -C bricks/virtualhub submodules
         make $MAKEOPTS -C bricks/virtualhub
 
-  debug:
-    name: debug firmware
-    needs: [cross_compiler, mpy_cross]
-    runs-on: ubuntu-20.04
+  ev3rt:
+    name: ev3rt uImage
+    needs: [mpy_cross]
+    runs-on: ubuntu-22.04
     steps:
     - name: Install cross-compiler
-      uses: actions/cache@v2
-      with:
-        path: ${{ runner.tool_cache }}/gcc-arm-10-2020-q4
-        key: gcc-arm-10-2020-q4
-    - name: Add cross-compiler to path
-      run: echo ${{ runner.tool_cache }}/gcc-arm-10-2020-q4/bin >> $GITHUB_PATH
+      run: sudo apt-get update && sudo apt-get install --yes gcc-arm-none-eabi ruby u-boot-tools
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 0
     - name: Download mpy-cross
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v3
+      with:
+        name: mpy-cross
+        path: micropython/mpy-cross
+    - name: Fix file permission
+      run: chmod +x micropython/mpy-cross/mpy-cross
+    - name: Build
+      run: make $MAKEOPTS -C bricks/ev3rt
+
+  debug:
+    name: debug firmware
+    needs: [mpy_cross]
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Install cross-compiler
+      run: sudo apt-get update && sudo apt-get install --yes gcc-arm-none-eabi
+    - name: Checkout repo
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+        fetch-depth: 0
+    - name: Download mpy-cross
+      uses: actions/download-artifact@v3
       with:
         name: mpy-cross
         path: micropython/mpy-cross
@@ -275,7 +269,7 @@ jobs:
 
   pbio:
     name: pbio tests
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       PBIO_TEST_RESULTS_DIR: lib/pbio/test/results
     steps:
@@ -284,13 +278,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install --yes doxygen graphviz lcov
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
     - name: Build
       run: |
         make $MAKEOPTS -C lib/pbio/test
-        ./lib/pbio/test/build/test-pbio
     - name: Build docs
       run: |
         make $MAKEOPTS -C lib/pbio/doc
