@@ -8,6 +8,10 @@ on:
     - '@pybricks/**'
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   MAKEOPTS: -j2
 
@@ -206,11 +210,19 @@ jobs:
     needs: [mpy_cross]
     runs-on: ubuntu-22.04
     steps:
+    - name: Install depedencies
+      run: sudo apt-get update && sudo apt-get install lcov python3-numpy --yes
     - name: Checkout repo
       uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 0
+    - name: Checkout submodules
+      run: |
+        cd micropython
+        git submodule update --init --depth 0 lib/axtls
+        git submodule update --init --depth 0 lib/berkeley-db-1.xx
+        git submodule update --init --depth 0 lib/libffi
     - name: Download mpy-cross
       uses: actions/download-artifact@v3
       with:
@@ -218,10 +230,15 @@ jobs:
         path: micropython/mpy-cross
     - name: Fix file permission
       run: chmod +x micropython/mpy-cross/mpy-cross
-    - name: Build
-      run: |
-        make $MAKEOPTS -C bricks/virtualhub submodules
-        make $MAKEOPTS -C bricks/virtualhub
+    - name: Build and test
+      run: COVERAGE=1 ./test-virtualhub.sh
+    - name: Coveralls
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: bricks/virtualhub/build-coverage/lcov.info
+        flag-name: virtualhub
+        parallel: true
 
   ev3rt:
     name: ev3rt uImage
@@ -296,3 +313,15 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         path-to-lcov: lib/pbio/test/build-coverage/lcov.info
         flag-name: PBIO
+        parallel: true
+
+  finish:
+    needs: [virtualhub, pbio]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true
+

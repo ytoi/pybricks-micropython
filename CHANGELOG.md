@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [3.2.1] - 2022-12-26
+
+### Fixed
+- Fixed `imu.angular_velocity` returning the values of `imu.acceleration`.
+
+[support#885]: https://github.com/pybricks/support/issues/885
+
+## [3.2.0] - 2022-12-20
+
+### Changed
+- Buffered stdout is flushed before ending user program.
+
+### Fixed
+- Fixed SPIKE/MINDSTORMS hubs advertising after disconnect while user program
+  is still running ([support#849]).
+- Fixed Essential hub hanging on boot when bootloader entered but USB cable
+  not connected ([support#821]).
+- Fixed button needs debouncing on City/Technic/Essential hubs ([support#716]).
+- Fixed motor hold drifting away under external input movement ([support#863]).
+
+[support#716]: https://github.com/pybricks/support/issues/716
+[support#821]: https://github.com/pybricks/support/issues/821
+[support#849]: https://github.com/pybricks/support/issues/849
+[support#863]: https://github.com/pybricks/support/issues/863
+
 ## [3.2.0c1] - 2022-12-09
 
 ### Fixed
@@ -420,7 +445,9 @@ Prerelease changes are documented at [support#48].
 
 
 <!-- diff links for headers -->
-[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0c1...HEAD
+[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.1...HEAD
+[3.2.1]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0...v3.2.1
+[3.2.0]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0c1...v3.2.0
 [3.2.0c1]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b6...v3.2.0c1
 [3.2.0b6]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b5...v3.2.0b6
 [3.2.0b5]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b4...v3.2.0b5

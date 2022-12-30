@@ -7,6 +7,7 @@
 #include "battery/battery.h"
 #include "block_device/block_device.h"
 #include "bluetooth/bluetooth.h"
+#include "button/button.h"
 #include "charger/charger.h"
 #include "clock/clock.h"
 #include "counter/counter.h"
@@ -34,6 +35,7 @@ void pbdrv_init(void) {
     pbdrv_battery_init();
     pbdrv_block_device_init();
     pbdrv_bluetooth_init();
+    pbdrv_button_init();
     pbdrv_charger_init();
     pbdrv_counter_init();
     pbdrv_imu_init();
@@ -46,6 +48,12 @@ void pbdrv_init(void) {
     pbdrv_sound_init();
     pbdrv_usb_init();
     pbdrv_watchdog_init();
+
+    // Some hubs have a bootloader that disables interrupts. Has to be done
+    // here otherwise Essential hub can hang on boot if it is earlier.
+    #if PBDRV_CONFIG_INIT_ENABLE_INTERRUPTS_ARM
+    __asm volatile ("cpsie i" : : : "memory");
+    #endif
 
     while (pbdrv_init_busy()) {
         process_run();
