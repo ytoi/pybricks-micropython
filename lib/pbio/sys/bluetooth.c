@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2020-2022 The Pybricks Authors
-// Copyright (c) 2022 Embedded and Real-Time Systems Laboratory,
+// Copyright (c) 2023 Embedded and Real-Time Systems Laboratory,
 //            Graduate School of Information Science, Nagoya Univ., JAPAN
 
 #include <pbsys/config.h>
@@ -110,6 +110,7 @@ void pbsys_bluetooth_rx_flush(void) {
     lwrb_reset(&uart_rx_ring);
 }
 
+static send_msg_t uart_msg;
 /**
  * Queues data to be transmitted via Bluetooth serial port.
  * @param data  [in]        The data to be sent.
@@ -122,7 +123,6 @@ void pbsys_bluetooth_rx_flush(void) {
  *                          if this platform does not support Bluetooth.
  */
 pbio_error_t pbsys_bluetooth_tx(const uint8_t *data, uint32_t *size) {
-    static send_msg_t uart_msg;
 
     // make sure we have a Bluetooth connection
     if (!pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_UART)) {
@@ -166,6 +166,23 @@ bool pbsys_bluetooth_tx_is_idle(void) {
     return !send_busy && lwrb_get_full(&uart_tx_ring) == 0;
 }
 
+
+void
+pb_bluetooth_uart_put_notify(void)
+{
+  // only allow one UART Tx message in the queue at a time
+  if (!uart_msg.is_queued) {
+      // Setting data and size are deferred until we actually send the message.
+      // This way, if the caller is only writing one byte at a time, we can
+      // still buffer data to send it more efficiently.
+      uart_msg.context.connection = PBDRV_BLUETOOTH_CONNECTION_UART;
+
+      uart_msg.is_queued = true;
+      list_add(send_queue, &uart_msg);
+      process_poll(&pbsys_bluetooth_process);
+  }
+}
+
 static pbio_pybricks_error_t handle_receive(pbdrv_bluetooth_connection_t connection, const uint8_t *data, uint32_t size) {
     if (connection == PBDRV_BLUETOOTH_CONNECTION_PYBRICKS) {
         return pbsys_command(data, size);
@@ -173,6 +190,7 @@ static pbio_pybricks_error_t handle_receive(pbdrv_bluetooth_connection_t connect
 
     if (connection == PBDRV_BLUETOOTH_CONNECTION_UART) {
         // This will drop data if buffer is full
+#if 0
         if (uart_rx_callback) {
             // If there is a callback hook, we have to process things one byte at
             // a time.
@@ -184,6 +202,25 @@ static pbio_pybricks_error_t handle_receive(pbdrv_bluetooth_connection_t connect
         } else {
             lwrb_write(&uart_rx_ring, data, size);
         }
+#endif
+
+#if 1
+        extern int tSIOAsyncPortPybricksBluetooth_eSIOCBR_pushReceive(char src);
+
+        if (uart_rx_callback) {
+            // If there is a callback hook, we have to process things one byte at
+            // a time.
+            for (uint32_t i = 0; i < size; i++) {
+                if (!uart_rx_callback(data[i])) {
+                    tSIOAsyncPortPybricksBluetooth_eSIOCBR_pushReceive(data[i]);
+                }
+            }
+        } else {
+            for (uint32_t i = 0; i < size; i++) {
+                tSIOAsyncPortPybricksBluetooth_eSIOCBR_pushReceive(data[i]);
+            }
+        }
+#endif
 
         return PBIO_PYBRICKS_ERROR_OK;
     }
@@ -193,8 +230,10 @@ static pbio_pybricks_error_t handle_receive(pbdrv_bluetooth_connection_t connect
 
 static void send_done(void) {
     send_msg_t *msg = list_pop(send_queue);
-
-    if (msg->context.connection == PBDRV_BLUETOOTH_CONNECTION_UART && lwrb_get_full(&uart_tx_ring)) {
+    
+    extern int tSIOAsyncPortPybricksBluetooth_eSIOCBR_sizeSend(void);
+    if (msg->context.connection == PBDRV_BLUETOOTH_CONNECTION_UART \
+        && tSIOAsyncPortPybricksBluetooth_eSIOCBR_sizeSend()) {
         // If there is more buffered data to send, put the message back in the queue
         list_add(send_queue, msg);
     } else {
@@ -313,8 +352,27 @@ PROCESS_THREAD(pbsys_bluetooth_process, ev, data) {
                 if (msg) {
                     msg->context.done = send_done;
                     if (msg->context.connection == PBDRV_BLUETOOTH_CONNECTION_UART) {
+#if 0
                         msg->context.size = lwrb_read(&uart_tx_ring, &msg->payload[0], PBIO_ARRAY_SIZE(msg->payload));
-                        assert(msg->context.size);
+#endif
+#if 1
+                        // TODO: msg->context.done = send_done
+                        extern int tSIOAsyncPortPybricksBluetooth_eSIOCBR_popSend(char *dst);
+                        msg->context.size = 0;
+                        for (uint32_t i = 0; i < PBIO_ARRAY_SIZE(msg->payload); i++) {
+                            if (tSIOAsyncPortPybricksBluetooth_eSIOCBR_popSend((char *)&msg->payload[i]) < 1) {
+                              break;
+                            }
+                            msg->context.size++;
+                        }
+#endif
+#if 0
+                        // TODO: msg->context.done = send_done
+                        extern int tSIOAsyncPortPybricksBluetooth_eSIOCBR_popSend(char *dst_data, uint32_t size);
+	                      msg->context.size = tSIOAsyncPortPybricksBluetooth_eSIOCBR_popSend(
+                            (char *)&msg->payload[0], PBIO_ARRAY_SIZE(msg->payload));
+#endif
+                        assert(msg->context.size > 0);
                     }
                     msg->context.data = &msg->payload[0];
                     send_busy = true;

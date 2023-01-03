@@ -19,7 +19,7 @@
 #include <usbd_cdc.h>
 #include <usbd_core.h>
 
-PROCESS(pbdrv_usb_process, "USB");
+PROCESS(pbdrv_usb_serial_process, "USB");
 
 static uint8_t usb_in_buf[CDC_DATA_FS_MAX_PACKET_SIZE];
 static uint8_t usb_out_buf[CDC_DATA_FS_MAX_PACKET_SIZE - 1];
@@ -42,7 +42,8 @@ static USBD_CDC_LineCodingTypeDef LineCoding = {
 };
 
 // moved to usb_stm32.c
-// static USBD_HandleTypeDef USBD_Device;
+// static USBD_HandleTypeDef husbd;
+extern USBD_HandleTypeDef husbd;
 extern USBD_DescriptorsTypeDef VCP_Desc;
 
 /**
@@ -54,8 +55,8 @@ extern USBD_DescriptorsTypeDef VCP_Desc;
 static int8_t CDC_Itf_Init(void) {
     ringbuf_init(&stdin_buf, stdin_data, (uint8_t)PBIO_ARRAY_SIZE(stdin_data));
     ringbuf_init(&stdout_buf, stdout_data, (uint8_t)PBIO_ARRAY_SIZE(stdout_data));
-    USBD_CDC_SetTxBuffer(&USBD_Device, usb_out_buf, 0);
-    USBD_CDC_SetRxBuffer(&USBD_Device, usb_in_buf);
+    USBD_CDC_SetTxBuffer(&husbd, usb_out_buf, 0);
+    USBD_CDC_SetRxBuffer(&husbd, usb_in_buf);
     usb_in_busy = false;
     usb_out_busy = false;
     usb_connected = false;
@@ -139,9 +140,17 @@ static int8_t CDC_Itf_Control(uint8_t cmd, uint8_t *pbuf, uint16_t length) {
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
 static int8_t CDC_Itf_Receive(uint8_t *Buf, uint32_t *Len) {
-    for (int i = 0; i < *Len; i++) {
+#if 0
+    for (uint32_t i = 0; i < *Len; i++) {
         ringbuf_put(&stdin_buf, Buf[i]);
     }
+#endif
+#if 1
+    extern int tSIOAsyncPortPybricksUSB_eSIOCBR_pushReceive(char src);
+    for (uint32_t i = 0; i < *Len; i++) {
+        tSIOAsyncPortPybricksUSB_eSIOCBR_pushReceive((char)Buf[i]);
+    }
+#endif
     usb_in_busy = false;
     // process_poll(&pbdrv_usb_process);
     return USBD_OK;
@@ -173,16 +182,20 @@ static USBD_CDC_ItfTypeDef USBD_CDC_fops = {
     .TransmitCplt = CDC_Itf_TransmitCplt,
 };
 
+void pbdrv_usb_serial_init(void) {
+    process_start(&pbdrv_usb_serial_process);
+}
+
 static void pbdrv_stm32_usb_serial_init(void) {
     // This is now done in usb_stm32.c
-    // USBD_Init(&USBD_Device, &VCP_Desc, 0);
-    USBD_RegisterClass(&USBD_Device, USBD_CDC_CLASS);
-    USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_fops);
-    USBD_Start(&USBD_Device);
+    //USBD_Init(&husbd, &VCP_Desc, 0);
+    USBD_RegisterClass(&husbd, USBD_CDC_CLASS);
+    USBD_CDC_RegisterInterface(&husbd, &USBD_CDC_fops);
+    USBD_Start(&husbd);
 }
 
 static void pbdrv_stm32_usb_serial_transmit(void) {
-    static int tx_size = 0;
+    static uint32_t tx_size = 0;
 
     if (usb_out_busy) {
         return;
@@ -191,24 +204,44 @@ static void pbdrv_stm32_usb_serial_transmit(void) {
     // If tx_size > 0 it means we have a pending retry, otherwise we get as
     // much as we can from the stdout buffer.
     if (tx_size == 0) {
+#if 0
         tx_size = ringbuf_elements(&stdout_buf);
+#endif
+#if 1
+        extern int tSIOAsyncPortPybricksUSB_eSIOCBR_sizeSend(void);
+        tx_size = tSIOAsyncPortPybricksUSB_eSIOCBR_sizeSend();
+#endif
         if (tx_size > PBIO_ARRAY_SIZE(usb_out_buf)) {
             tx_size = PBIO_ARRAY_SIZE(usb_out_buf);
         }
         if (tx_size > 0) {
-            for (int i = 0; i < tx_size; i++) {
+#if 0
+            for (uint32_t i = 0; i < tx_size; i++) {
                 usb_out_buf[i] = ringbuf_get(&stdout_buf);
             }
+#endif
+#if 1
+            extern int tSIOAsyncPortPybricksUSB_eSIOCBR_popSend(char *dst);
+            for (uint32_t i = 0; i < tx_size; i++) {
+                tSIOAsyncPortPybricksUSB_eSIOCBR_popSend((char *)&usb_out_buf[i]);
+            }
+#endif
+#if 0
+            extern int tSIOAsyncPortPybricksUSB_eSIOCBR_popSend(char *dst_data, uint32_t size);
+            for (uint32_t i = 0; i < tx_size; i++) {
+                tSIOAsyncPortPybricksUSB_eSIOCBR_popSend((char *)&usb_out_buf[i], 1);
+            }
+#endif
         }
     }
 
     if (tx_size > 0) {
-        USBD_CDC_SetTxBuffer(&USBD_Device, usb_out_buf, tx_size);
-        if (USBD_CDC_TransmitPacket(&USBD_Device) == USBD_OK) {
+        USBD_CDC_SetTxBuffer(&husbd, usb_out_buf, tx_size);
+        if (USBD_CDC_TransmitPacket(&husbd) == USBD_OK) {
             usb_out_busy = true;
             tx_size = 0;
         }
-    }
+    } 
 }
 
 static void pbdrv_stm32_usb_serial_receive(void) {
@@ -216,7 +249,7 @@ static void pbdrv_stm32_usb_serial_receive(void) {
         return;
     }
 
-    if (USBD_CDC_ReceivePacket(&USBD_Device) == USBD_OK) {
+    if (USBD_CDC_ReceivePacket(&husbd) == USBD_OK) {
         usb_in_busy = true;
     }
 }
@@ -244,7 +277,7 @@ static void pbdrv_stm32_usb_serial_receive(void) {
 
 // TODO: This process needs to be started by the main USB code (we still want
 // a separate process for serial since it can be polled quite frequently).
-PROCESS_THREAD(pbdrv_usb_process, ev, data) {
+PROCESS_THREAD(pbdrv_usb_serial_process, ev, data) {
     static struct etimer timer;
 
     PROCESS_BEGIN();

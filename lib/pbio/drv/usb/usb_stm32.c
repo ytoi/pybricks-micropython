@@ -18,11 +18,12 @@
 #include <pbio/util.h>
 
 #include "../charger/charger.h"
+#include "./usb.h"
 #include "./usb_stm32.h"
 
 PROCESS(pbdrv_usb_process, "USB");
 
-static USBD_HandleTypeDef husbd;
+USBD_HandleTypeDef husbd;
 static PCD_HandleTypeDef hpcd;
 static volatile bool vbus_active;
 static pbdrv_usb_bcd_t pbdrv_usb_bcd;
@@ -128,11 +129,20 @@ void pbdrv_usb_init(void) {
     husbd.pData = &hpcd;
     hpcd.pData = &husbd;
 
+    #if PBDRV_CONFIG_USB_STM32F4_CDC
+    extern USBD_DescriptorsTypeDef VCP_Desc;
+    USBD_Init(&husbd, &VCP_Desc, 0);
+    #else
     USBD_Init(&husbd, NULL, 0);
+    #endif
+
     process_start(&pbdrv_usb_process);
 
     // VBUS may already be active
     process_poll(&pbdrv_usb_process);
+
+    // If USB CDC is enbaled, initilize it. 
+    pbdrv_usb_serial_init();
 }
 
 pbdrv_usb_bcd_t pbdrv_usb_get_bcd(void) {

@@ -21,4 +21,10 @@ void pbdrv_usb_init(void);
 
 #endif // PBDRV_CONFIG_USB
 
+#if PBDRV_CONFIG_USB_STM32F4_CDC
+void pbdrv_usb_serial_init(void);
+#else // PBDRV_CONFIG_USB_STM32F4_CDC
+#define pbdrv_usb_serial_init()
+#endif // PBDRV_CONFIG_USB_STM32F4_CDC
+
 #endif // _INTERNAL_PBDRV_USB_H_
