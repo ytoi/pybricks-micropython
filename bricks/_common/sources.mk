@@ -145,7 +145,7 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/counter/counter_lpf2.c \
 	drv/counter/counter_nxt.c \
 	drv/counter/counter_stm32f0_gpio_quad_enc.c \
-	drv/counter/counter_virtual.c \
+	drv/counter/counter_virtual_cpython.c \
 	drv/gpio/gpio_stm32f0.c \
 	drv/gpio/gpio_stm32f4.c \
 	drv/gpio/gpio_stm32l4.c \
@@ -163,7 +163,7 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	drv/motor_driver/motor_driver_ev3dev_stretch.c \
 	drv/motor_driver/motor_driver_hbridge_pwm.c \
 	drv/motor_driver/motor_driver_nxt.c \
-	drv/motor_driver/motor_driver_virtual.c \
+	drv/motor_driver/motor_driver_virtual_cpython.c \
 	drv/pwm/pwm_core.c \
 	drv/pwm/pwm_lp50xx_stm32.c \
 	drv/pwm/pwm_stm32_tim.c \

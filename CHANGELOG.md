@@ -2,7 +2,28 @@
 
 # Changelog
 
-## [Unreleased]
+## [3.2.3] - 2023-02-17
+
+### Added
+- Added `close()` method to `DCMotor` and `Motor` so they can be closed and
+  re-initialized later ([support#904]).
+
+### Fixed
+- Fixed `Light` controlling wrong ports on Move hub ([support#913]).
+- Fixed type checking optimized out on Move hub ([support#950]).
+
+[support#904]: https://github.com/pybricks/support/issues/904
+[support#913]: https://github.com/pybricks/support/issues/913
+[support#950]: https://github.com/pybricks/support/issues/950
+
+## [3.2.2] - 2023-01-06
+
+### Fixed
+- Fixed some objects do not implement `__hash__` ([support#876]).
+- Fixed `Motor.run_time` not completing under load ([support#903]).
+
+[support#876]: https://github.com/pybricks/support/issues/876
+[support#903]: https://github.com/pybricks/support/issues/903
 
 ## [3.2.1] - 2022-12-26
 
@@ -445,7 +466,8 @@ Prerelease changes are documented at [support#48].
 
 
 <!-- diff links for headers -->
-[Unreleased]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.1...HEAD
+[3.2.3]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.2...v3.2.3
+[3.2.2]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.1...v3.2.2
 [3.2.1]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0c1...v3.2.0
 [3.2.0c1]: https://github.com/pybricks/pybricks-micropython/compare/v3.2.0b6...v3.2.0c1
