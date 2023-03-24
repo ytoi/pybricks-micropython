@@ -71,6 +71,20 @@ int32_t pbio_battery_get_duty_from_voltage(int32_t voltage) {
 }
 
 /**
+ * Gets the duty cycle required to output the desired voltage given the
+ * current battery voltage.
+ *
+ * @param [in]  voltage     The desired voltage in mV.
+ * @param [in]  duty        A duty cycle percentage in the range -100 to 100.
+ */
+int32_t pbio_battery_get_duty_pct_from_voltage(int32_t voltage) {
+    // Calculate unbounded duty cycle value.
+    int32_t duty_cycle = voltage * 100 / (battery_voltage_avg_scaled / SCALE);
+
+    return pbio_int_math_clamp(duty_cycle, 100);
+}
+
+/**
  * Gets the effective voltage resulting from @p duty given the current battery voltage.
  *
  * If @p duty it outside of the specified range, it will be clamped to that range.

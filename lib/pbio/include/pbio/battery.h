@@ -29,6 +29,7 @@ pbio_error_t pbio_battery_update(void);
 /** @endcond */
 int32_t pbio_battery_get_average_voltage(void);
 int32_t pbio_battery_get_duty_from_voltage(int32_t voltage);
+int32_t pbio_battery_get_duty_pct_from_voltage(int32_t voltage);
 int32_t pbio_battery_get_voltage_from_duty(int32_t duty);
 int32_t pbio_battery_get_voltage_from_duty_pct(int32_t duty);
 
@@ -47,6 +48,10 @@ static inline int32_t pbio_battery_get_average_voltage(void) {
 }
 
 static inline int32_t pbio_battery_get_duty_from_voltage(int32_t voltage) {
+    return 0;
+}
+
+static inline int32_t pbio_battery_get_duty_pct_from_voltage(int32_t voltage) {
     return 0;
 }
 
