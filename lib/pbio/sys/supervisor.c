@@ -23,7 +23,13 @@ void pbsys_supervisor_poll(void) {
     // Shut down on low voltage so we don't damage rechargeable batteries
     // or if there is no BLE connection made within 3 minutes
     if (pbsys_status_test_debounce(PBIO_PYBRICKS_STATUS_BATTERY_LOW_VOLTAGE_SHUTDOWN, true, 3000)
+#if !PBSYS_CONFIG_BLUETOOTH_ADVERTISING_MANUAL_CONTROL
         || pbsys_status_test_debounce(PBIO_PYBRICKS_STATUS_BLE_ADVERTISING, true, 3 * 60000)) {
+#else
+      // If it is configured to control the BLE advertising,
+      // we don't sleep automatically even if any BLE connnection hasn't made for 3 minutes during advertising.
+      ) {
+#endif
         pbsys_status_set(PBIO_PYBRICKS_STATUS_SHUTDOWN_REQUEST);
     }
 }

@@ -312,17 +312,44 @@ PROCESS_THREAD(pbsys_bluetooth_process, ev, data) {
         pbdrv_bluetooth_power_on(true);
 
         PROCESS_WAIT_UNTIL(pbdrv_bluetooth_is_ready());
+#if PBSYS_CONFIG_BLUETOOTH_ADVERTISING_MANUAL_CONTROL
+        // Start advertising only after hub_bluetooth_advertising_enabled is set to true.
+        extern bool hub_bluetooth_advertising_enabled;
+        while (1) {
+            // Start advertising when hub_bluetooth_advertising_enabled has been changed to true.
+            PROCESS_WAIT_UNTIL(
+                pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)
+                || pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN)
+                || hub_bluetooth_advertising_enabled);
+            if (pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)
+                || pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN)) {
+                break;
+            }
+            pbdrv_bluetooth_start_advertising();
+            pbsys_status_set(PBIO_PYBRICKS_STATUS_BLE_ADVERTISING);
 
+            // Stop advertising when hub_bluetooth_advertising_enabled has been changed to false.
+            PROCESS_WAIT_UNTIL(
+                pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)
+                || pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN)
+                || !hub_bluetooth_advertising_enabled);
+            if (pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)
+                || pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN)) {
+                break;
+            }
+            pbdrv_bluetooth_stop_advertising();
+            pbsys_status_clear(PBIO_PYBRICKS_STATUS_BLE_ADVERTISING);
+        }
+#else
         pbdrv_bluetooth_start_advertising();
 
         // TODO: allow user programs to initiate BLE connections
         pbsys_status_set(PBIO_PYBRICKS_STATUS_BLE_ADVERTISING);
         PROCESS_WAIT_UNTIL(
             pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)
-#if !PBSYS_CONFIG_BLUETOOTH_ADVERTISE_WHILE_USER_PROGRAM_RUNNING
             || pbsys_status_test(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING)
-#endif
             || pbsys_status_test(PBIO_PYBRICKS_STATUS_SHUTDOWN));
+#endif
 
         if (!pbdrv_bluetooth_is_connected(PBDRV_BLUETOOTH_CONNECTION_LE)) {
             // if a connection wasn't made, we need to manually stop advertising
@@ -384,7 +411,7 @@ PROCESS_THREAD(pbsys_bluetooth_process, ev, data) {
         }
 
         reset_all();
-#if !PBSYS_CONFIG_BLUETOOTH_ADVERTISE_WHILE_USER_PROGRAM_RUNNING
+#if !PBSYS_CONFIG_BLUETOOTH_ADVERTISING_MANUAL_CONTROL
         PROCESS_WAIT_WHILE(pbsys_status_test(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING));
 #endif
 
