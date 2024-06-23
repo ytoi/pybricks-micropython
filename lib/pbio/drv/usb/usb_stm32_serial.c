@@ -196,9 +196,8 @@ static void pbdrv_stm32_usb_serial_init(void) {
 
 static void pbdrv_stm32_usb_serial_transmit(void) {
     static uint32_t tx_size = 0;
-
     if (usb_out_busy) {
-        return;
+//        return;
     }
 
     // If tx_size > 0 it means we have a pending retry, otherwise we get as
