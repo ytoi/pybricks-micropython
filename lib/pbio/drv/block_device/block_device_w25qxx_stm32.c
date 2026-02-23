@@ -27,6 +27,18 @@
 #include <pbio/error.h>
 #include <pbio/int_math.h>
 
+static struct {
+    /**
+     * How much data to load on boot. Includes
+     * the size of this field, because it is also saved.
+     */
+    uint32_t saved_size;
+    /**
+     * A copy of the data, up to 1024 bytes, loaded from flash and application heap.
+     */
+    uint8_t data[1024];
+} ramdisk __attribute__((section(".noinit"), used));
+
 /**
  * SPI bus state.
  */
@@ -579,9 +591,10 @@ void pbdrv_block_device_init(void) {
     process_start(&pbdrv_block_device_w25qxx_stm32_init_process);
 }
 
+static pbio_error_t init_process_err;
+
 PROCESS_THREAD(pbdrv_block_device_w25qxx_stm32_init_process, ev, data) {
 
-    static pbio_error_t err;
     static struct pt child;
 
     PROCESS_BEGIN();
@@ -589,14 +602,14 @@ PROCESS_THREAD(pbdrv_block_device_w25qxx_stm32_init_process, ev, data) {
     bdev.process = &pbdrv_block_device_w25qxx_stm32_init_process;
 
     // Write the ID getter command
-    PROCESS_PT_SPAWN(&child, spi_command_thread(&child, &cmd_id_tx, &err));
-    if (err != PBIO_SUCCESS) {
+    PROCESS_PT_SPAWN(&child, spi_command_thread(&child, &cmd_id_tx, &init_process_err));
+    if (init_process_err != PBIO_SUCCESS) {
         PROCESS_EXIT();
     }
 
     // Get ID command reply
-    PROCESS_PT_SPAWN(&child, spi_command_thread(&child, &cmd_id_rx, &err));
-    if (err != PBIO_SUCCESS) {
+    PROCESS_PT_SPAWN(&child, spi_command_thread(&child, &cmd_id_rx, &init_process_err));
+    if (init_process_err != PBIO_SUCCESS) {
         PROCESS_EXIT();
     }
 
@@ -607,10 +620,26 @@ PROCESS_THREAD(pbdrv_block_device_w25qxx_stm32_init_process, ev, data) {
 
     bdev.process = NULL;
 
+    // Read size of stored data.
+    PROCESS_PT_SPAWN(&child, pbdrv_block_device_read(&child, 0, (uint8_t *)&ramdisk.saved_size, sizeof(ramdisk.saved_size), &init_process_err));
+    if (init_process_err == PBIO_SUCCESS) {
+      // Read the available data into RAM.
+      if (ramdisk.saved_size > sizeof(ramdisk.data)) ramdisk.saved_size = sizeof(ramdisk.data);
+      PROCESS_PT_SPAWN(&child, pbdrv_block_device_read(&child, 0, (uint8_t *)&ramdisk, ramdisk.saved_size, &init_process_err));
+    }
+
     // Deinitialization done.
     pbdrv_init_busy_down();
 
     PROCESS_END();
+}
+
+pbio_error_t pbdrv_block_device_get_data(uint8_t **data) {
+    *data = &ramdisk.data[0];
+
+    // Higher level code can use the ramdisk data if initialization completed
+    // successfully. Otherwise it should reset to factory default data.
+    return init_process_err;
 }
 
 #endif // PBDRV_CONFIG_BLOCK_DEVICE_W25QXX_STM32
