@@ -190,6 +190,8 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	src/differentiator.c \
 	src/drivebase.c \
 	src/error.c \
+	src/geometry.c \
+	src/imu.c \
 	src/int_math.c \
 	src/integrator.c \
 	src/iodev.c \
@@ -223,6 +225,8 @@ PBIO_SRC_C = $(addprefix lib/pbio/,\
 	sys/program_load.c \
 	sys/program_stop.c \
 	sys/status.c \
+	sys/storage.c \
+	sys/storage_settings.c \
 	sys/supervisor.c \
 	)
 
