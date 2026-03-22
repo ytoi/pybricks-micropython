@@ -46,7 +46,9 @@ typedef struct {
 /**
  * Slot at which incoming program data is currently being received.
  */
+#if 0
 static uint8_t incoming_slot = 0;
+#endif
 
 /**
  * Map of loaded data. All data types are little-endian.
@@ -197,7 +199,11 @@ void pbsys_storage_reset_storage(void) {
     pbsys_storage_settings_set_defaults(&map->settings);
 
     // Set firmware version used to create current storage map.
+#if 0
     strncpy(map->stored_firmware_hash, pbsys_main_get_application_version_hash(), sizeof(map->stored_firmware_hash));
+#else
+    memset(map->stored_firmware_hash, 0, sizeof(map->stored_firmware_hash));
+#endif
 
     // Ensure new firmware version and default settings are written on poweroff.
     pbsys_storage_request_write();
@@ -275,8 +281,8 @@ static void pbsys_storage_update_checksum(void) {
 }
 #endif // PBSYS_CONFIG_STORAGE_OVERLAPS_BOOTLOADER_CHECKSUM
 
+#if 0
 static pbio_error_t pbsys_storage_prepare_receive(void) {
-
     #if PBSYS_CONFIG_STORAGE_NUM_SLOTS == 1
     map->slot_info[incoming_slot].size = 0;
     map->slot_info[incoming_slot].offset = 0;
@@ -333,6 +339,7 @@ static pbio_error_t pbsys_storage_prepare_receive(void) {
 
     return PBIO_SUCCESS;
 }
+#endif
 
 /**
  * Writes the user program metadata.
@@ -349,6 +356,7 @@ static pbio_error_t pbsys_storage_prepare_receive(void) {
  *                      Otherwise, ::PBIO_SUCCESS.
  */
 pbio_error_t pbsys_storage_set_program_size(uint32_t new_size) {
+#if 0
     // we can't allow this to be changed while a user program is running
     if (pbsys_status_test(PBIO_PYBRICKS_STATUS_USER_PROGRAM_RUNNING)) {
         return PBIO_ERROR_BUSY;
@@ -373,7 +381,7 @@ pbio_error_t pbsys_storage_set_program_size(uint32_t new_size) {
 
     // Program download complete, so request saving on poweroff.
     pbsys_storage_request_write();
-
+#endif
     return PBIO_SUCCESS;
 }
 
@@ -392,6 +400,7 @@ pbio_error_t pbsys_storage_set_program_size(uint32_t new_size) {
  *                          Otherwise ::PBIO_SUCCESS.
  */
 pbio_error_t pbsys_storage_set_program_data(uint32_t offset, const void *data, uint32_t size) {
+#if 0
     // REVISIT: This protects against writing beyond the limit, but we should
     // be informing the host about this ahead of time instead of failing during
     // runtime.
@@ -405,7 +414,7 @@ pbio_error_t pbsys_storage_set_program_data(uint32_t offset, const void *data, u
     }
 
     memcpy(map->program_data + map->slot_info[incoming_slot].offset + offset, data, size);
-
+#endif
     return PBIO_SUCCESS;
 }
 
@@ -416,6 +425,7 @@ pbio_error_t pbsys_storage_set_program_data(uint32_t offset, const void *data, u
  * @param [in]  offset      The program data structure.
  */
 void pbsys_storage_get_program_data(pbsys_main_program_t *program) {
+#if 0
     //
     // REVISIT: We used to provide access to user code on the REPL. This is now
     //          extended to providing access to the active slot. Do we really
@@ -430,6 +440,7 @@ void pbsys_storage_get_program_data(pbsys_main_program_t *program) {
     // User ram starts after the last slot.
     program->user_ram_start = map->program_data + pbsys_storage_get_used_program_data_size();
     program->user_ram_end = ((void *)&pbsys_user_ram_data_map) + sizeof(pbsys_user_ram_data_map);
+#endif
 }
 
 PROCESS(pbsys_storage_process, "storage");
@@ -466,8 +477,11 @@ PROCESS_THREAD(pbsys_storage_process, ev, data) {
     // Read the available data into RAM.
     PROCESS_PT_SPAWN(&pt, pbdrv_block_device_read(&pt, 0, (uint8_t *)map, map->saved_data_size, &err));
 
+#if 0
     bool is_bad_version = strncmp(map->stored_firmware_hash, pbsys_main_get_application_version_hash(), sizeof(map->stored_firmware_hash));
-
+#else
+    bool is_bad_version = false;
+#endif
     // Test that storage successfully loaded and matches current firmware,
     // otherwise reset storage.
     if (err != PBIO_SUCCESS || is_bad_version) {
